@@ -13,20 +13,6 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "label": "wave-window",
-        "title": "Wave Window",
-        "width": 500,
-        "height": 100,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "resizable": false,
-        "visible": false,
-        "center": false,
-        "url": "src/wave-window.html"
-      },
-      {
         "label": "settings",
         "title": "VWisper Settings",
         "width": 500,

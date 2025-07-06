@@ -14,6 +14,9 @@ interface AudioDevice {
 const Settings = () => {
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [modelDir, setModelDir] = useState<string>("");
   const [apiKey, setApiKey] = useState<string>("");
   const [status, setStatus] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -36,6 +39,28 @@ const Settings = () => {
     }
   };
 
+  const refreshModels = async () => {
+    try {
+      const mods: string[] = await invoke("list_available_models");
+      setModels(mods);
+      const current: string | null = await invoke("get_current_preferred_model");
+      if (current) setSelectedModel(current);
+      else if (mods.length) setSelectedModel(mods[0]);
+    } catch (e) {
+      console.error(e);
+      showStatus("Failed to load models", false);
+    }
+  };
+
+  const loadModelDir = async () => {
+    try {
+      const dir: string = await invoke("get_models_directory");
+      setModelDir(dir);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const loadApiKey = async () => {
     try {
       const key: string | null = await invoke("get_current_groq_api_key");
@@ -45,6 +70,8 @@ const Settings = () => {
 
   useEffect(() => {
     refreshDevices();
+    refreshModels();
+    loadModelDir();
     loadApiKey();
   }, []);
 
@@ -55,6 +82,7 @@ const Settings = () => {
     }
     try {
       await invoke("set_audio_device", { deviceName: selectedDevice });
+      if (selectedModel) await invoke("set_preferred_model", { modelName: selectedModel });
       if (apiKey.trim()) await invoke("set_groq_api_key", { apiKey: apiKey.trim() });
       showStatus("Settings saved", true);
     } catch (e: any) {
@@ -90,6 +118,23 @@ const Settings = () => {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Model */}
+      <div className="setting-group">
+        <label className="setting-label">Whisper Model</label>
+        <select
+          className="setting-input"
+          value={selectedModel ?? ""}
+          onChange={(e) => setSelectedModel(e.target.value)}
+        >
+          {models.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+        <div style={{ fontSize: 12, marginTop: 4 }}>Model dir: {modelDir}</div>
       </div>
 
       {/* API key */}

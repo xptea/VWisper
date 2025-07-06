@@ -1,5 +1,5 @@
-use tauri::{Manager, Emitter};
-use log::{info, error};
+use tauri::{Manager, Emitter, WebviewWindowBuilder, WebviewUrl};
+use log::{info, error, warn, debug};
 use crate::modules::{
     core::state::set_window_visible,
     audio::{
@@ -10,6 +10,7 @@ use crate::modules::{
     },
     audio::devices::AudioDeviceManager,
     settings::AppConfig,
+    audio::processor::request_cancel_processing,
 };
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
@@ -19,11 +20,76 @@ static AUDIO_PROCESSOR: Lazy<Arc<Mutex<Option<AudioProcessor>>>> = Lazy::new(|| 
     Arc::new(Mutex::new(None))
 });
 
+// Global window counter to prevent multiple windows
+static WAVE_WINDOW_COUNT: Lazy<Arc<Mutex<u32>>> = Lazy::new(|| {
+    Arc::new(Mutex::new(0))
+});
+
+// Helper: create a new wave window with default settings
+fn create_wave_window(app: &tauri::AppHandle) -> Result<(), String> {
+    if app.get_webview_window("wave-window").is_some() {
+        return Ok(()); // already exists
+    }
+
+    match WebviewWindowBuilder::new(
+        app,
+        "wave-window",
+        WebviewUrl::App("src/wave-window.html".into()),
+    )
+    .title("VWisper Wave")
+    .inner_size(80.0, 80.0)
+    .min_inner_size(80.0, 80.0)
+    .max_inner_size(200.0, 80.0)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .visible(false)
+    .build() {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[tauri::command]
 pub fn show_wave_window(app: tauri::AppHandle) -> Result<(), String> {
     info!("Showing wave window");
     
+    // Check window count
+    let mut count_guard = WAVE_WINDOW_COUNT.lock().unwrap();
+    if *count_guard > 0 {
+        info!("Wave window already exists (count: {}), skipping show", *count_guard);
+        return Ok(());
+    }
+    
+    // Ensure window exists; create if missing
+    if app.get_webview_window("wave-window").is_none() {
+        create_wave_window(&app)?;
+    }
+
     if let Some(window) = app.get_webview_window("wave-window") {
+        // If already visible, just shrink and reset UI then return.
+        if window.is_visible().unwrap_or(false) {
+            info!("Wave window already visible – resetting to compact mode");
+
+            let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 }));
+
+            // Reset bubble UI state
+            if let Err(e) = window.emit("wave-reset", ()) {
+                error!("Failed to emit wave-reset event: {}", e);
+            }
+
+            return Ok(());
+        }
+
+        // Increment counter only when becoming visible for first time in this cycle
+        *count_guard += 1;
+        info!("Wave window count: {}", *count_guard);
+        
+        // Ensure window starts at compact size before show
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 }));
+        
         // Unminimize and show the window
         let _ = window.unminimize();
         
@@ -39,7 +105,7 @@ pub fn show_wave_window(app: tauri::AppHandle) -> Result<(), String> {
             // Determine the current window size so we can truly center it.
             let (win_w, win_h) = match window.inner_size() {
                 Ok(size) => (size.width as i32, size.height as i32),
-                Err(_) => (120, 40), // Fallback to defaults if size query fails
+                Err(_) => (80, 80), // Fallback to new defaults if size query fails
             };
 
             // Center horizontally & move near the bottom with padding.
@@ -47,7 +113,10 @@ pub fn show_wave_window(app: tauri::AppHandle) -> Result<(), String> {
             let padding_bottom = 60; // pixels above the bottom edge
             let y = mon_pos.y + mon_size.height as i32 - win_h - padding_bottom;
 
-            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+            // Only set position if window is not already visible to prevent flickering
+            if !window.is_visible().unwrap_or(false) {
+                let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+            }
         }
         
         match window.show() {
@@ -56,15 +125,20 @@ pub fn show_wave_window(app: tauri::AppHandle) -> Result<(), String> {
                 set_window_visible(true);
 
                 // Tell the frontend to reset its UI state so the bubble starts small.
-                if let Err(e) = app.emit_to("wave-window", "wave-reset", ()) {
+                if let Err(e) = window.emit("wave-reset", ()) {
                     error!("Failed to emit wave-reset event: {}", e);
                 }
             }
             Err(e) => {
+                // Decrement counter on error
+                *count_guard -= 1;
                 error!("Failed to show window: {}", e);
                 return Err(e.to_string());
             }
         }
+    } else {
+        error!("Wave window not found");
+        return Err("Wave window not found".to_string());
     }
     Ok(())
 }
@@ -73,22 +147,25 @@ pub fn show_wave_window(app: tauri::AppHandle) -> Result<(), String> {
 pub fn hide_wave_window(app: tauri::AppHandle) -> Result<(), String> {
     info!("Hiding wave window");
     
+    // Ensure window exists; create if missing
+    if app.get_webview_window("wave-window").is_none() {
+        create_wave_window(&app)?;
+    }
+
     if let Some(window) = app.get_webview_window("wave-window") {
-        // Attempt to minimize
-        if let Err(e) = window.minimize() {
-            error!("Failed to minimize window: {}", e);
+        // Close and destroy the window entirely instead of just hiding
+        match window.close() {
+            Ok(_) => info!("Wave window closed"),
+            Err(e) => warn!("Failed to close wave window: {}", e),
         }
-        
-        // Ensure the window is hidden
-        match window.hide() {
-            Ok(_) => {
-                info!("Wave window hidden successfully");
-                set_window_visible(false);
-            }
-            Err(e) => {
-                error!("Failed to hide window: {}", e);
-                return Err(e.to_string());
-            }
+
+        set_window_visible(false);
+
+        // Decrement counter
+        let mut count_guard = WAVE_WINDOW_COUNT.lock().unwrap();
+        if *count_guard > 0 {
+            *count_guard -= 1;
+            info!("Wave window count: {}", *count_guard);
         }
     }
     Ok(())
@@ -207,6 +284,46 @@ pub fn get_current_groq_api_key() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
+pub fn debug_wave_windows(app: tauri::AppHandle) -> Result<String, String> {
+    let windows = app.webview_windows();
+    let wave_windows: Vec<_> = windows.values().filter(|w| w.label() == "wave-window").collect();
+    
+    let count_guard = WAVE_WINDOW_COUNT.lock().unwrap();
+    let info = format!(
+        "Total windows: {}, Wave windows: {}, Counter: {}",
+        windows.len(),
+        wave_windows.len(),
+        *count_guard
+    );
+    
+    info!("{}", info);
+    
+    for (i, window) in wave_windows.iter().enumerate() {
+        let is_visible = window.is_visible().unwrap_or(false);
+        let is_minimized = window.is_minimized().unwrap_or(false);
+        info!("Wave window {}: visible={}, minimized={}", i, is_visible, is_minimized);
+    }
+    
+    Ok(info)
+}
+
+#[tauri::command]
+pub fn reset_wave_window_counter() -> Result<String, String> {
+    let mut count_guard = WAVE_WINDOW_COUNT.lock().unwrap();
+    let old_count = *count_guard;
+    *count_guard = 0;
+    info!("Reset wave window counter from {} to 0", old_count);
+    Ok(format!("Reset counter from {} to 0", old_count))
+}
+
+pub fn reset_wave_window_counter_internal() {
+    let mut count_guard = WAVE_WINDOW_COUNT.lock().unwrap();
+    let old_count = *count_guard;
+    *count_guard = 0;
+    info!("Reset wave window counter from {} to 0", old_count);
+}
+
+#[tauri::command]
 pub fn start_recording(app: tauri::AppHandle) -> Result<(), String> {
     info!("Starting recording command called");
     
@@ -316,10 +433,41 @@ pub fn stop_recording_and_process(app: tauri::AppHandle) -> Result<(), String> {
     // Stop recording (this will trigger processing)
     stop_recording(app.clone())?;
     
+    // Resize window to accommodate processing section
+    if let Some(window) = app.get_webview_window("wave-window") {
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 200, height: 80 })) {
+            error!("Failed to resize window: {}", e);
+        }
+    }
+    
     // Emit event to expand window for processing
     if let Err(e) = app.emit("expand-for-processing", ()) {
         error!("Failed to emit expand-for-processing event: {}", e);
     }
     
+    Ok(())
+}
+
+#[tauri::command]
+pub fn cancel_processing(app: tauri::AppHandle) -> Result<(), String> {
+    info!("Cancelling current recording/processing");
+
+    // Signal the audio processor (if any) to abort
+    request_cancel_processing();
+
+    // Stop recording if it is still active – ignore any errors
+    if crate::modules::audio::is_global_recording() {
+        let _ = stop_recording(app.clone());
+    }
+
+    // Hide the wave window, if present
+    if let Some(window) = app.get_webview_window("wave-window") {
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 }));
+        let _ = window.hide();
+    }
+
+    // Reset the internal window counter so the next invocation works as expected
+    reset_wave_window_counter_internal();
+
     Ok(())
 } 

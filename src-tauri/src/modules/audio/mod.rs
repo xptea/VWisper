@@ -6,4 +6,5 @@ pub mod processor;
 
 pub use recorder::*; 
 pub use devices::*;
+pub use processor::request_cancel_processing;
 pub use processor::*; 

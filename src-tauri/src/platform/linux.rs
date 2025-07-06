@@ -54,6 +54,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
         let mut last_control_state = false;
         let mut last_action_time = std::time::Instant::now();
         let mut consecutive_errors = 0;
+        let mut last_window_show_time = std::time::Instant::now();
         
         log::info!("Linux key monitoring started using device_query");
         log::info!("Hold RIGHT CTRL to record, release to process and see results");
@@ -65,24 +66,34 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             // Check for key press (show window and start recording)
             if control_pressed && !last_control_state {
                 let now = std::time::Instant::now();
-                if now.duration_since(last_action_time) > Duration::from_millis(200) {
+                if now.duration_since(last_action_time) > Duration::from_millis(500) { // Increased debounce
                     last_action_time = now;
                     
-                    // Limit consecutive errors to prevent spam
-                    if consecutive_errors < 3 {
-                        // Show window and start recording
-                        let result = crate::modules::ui::commands::show_wave_window_and_start_recording(app_handle.clone());
+                    // Additional check to prevent rapid-fire window creation
+                    if now.duration_since(last_window_show_time) > Duration::from_millis(1000) {
+                        last_window_show_time = now;
                         
-                        if result.is_err() {
-                            consecutive_errors += 1;
-                            log::warn!("Show window and start recording failed, error count: {}", consecutive_errors);
+                        log::info!("RIGHT CTRL pressed - attempting to show window and start recording");
+                        
+                        // Limit consecutive errors to prevent spam
+                        if consecutive_errors < 3 {
+                            // Show window and start recording
+                            let result = crate::modules::ui::commands::show_wave_window_and_start_recording(app_handle.clone());
+                            
+                            if result.is_err() {
+                                consecutive_errors += 1;
+                                log::warn!("Show window and start recording failed, error count: {}", consecutive_errors);
+                            } else {
+                                consecutive_errors = 0; // Reset error count on success
+                                log::info!("Successfully showed window and started recording");
+                            }
                         } else {
-                            consecutive_errors = 0; // Reset error count on success
+                            log::error!("Too many consecutive errors while showing window. Aborting.");
+                            thread::sleep(Duration::from_millis(1000)); // Wait longer
+                            consecutive_errors = 0; // Reset after waiting
                         }
                     } else {
-                        log::error!("Too many consecutive errors while showing window. Aborting.");
-                        thread::sleep(Duration::from_millis(1000)); // Wait longer
-                        consecutive_errors = 0; // Reset after waiting
+                        log::warn!("Window show request too soon, ignoring");
                     }
                 }
             }

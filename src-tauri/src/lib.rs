@@ -2,9 +2,15 @@
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use log::{info, error};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Once;
 
 mod modules;
 mod platform;
+
+// Global flag to ensure key monitoring is only started once
+static KEY_MONITORING_STARTED: AtomicBool = AtomicBool::new(false);
+static INIT: Once = Once::new();
 
 use modules::{
     audio::init_audio_recorder,
@@ -24,6 +30,9 @@ use modules::{
             set_audio_device,
             set_groq_api_key,
             get_current_groq_api_key,
+            debug_wave_windows,
+            reset_wave_window_counter,
+            cancel_processing,
         },
         tray::create_system_tray,
     },
@@ -62,54 +71,66 @@ pub fn run() {
 
     tauri::Builder::default()
         .setup(|app| {
-            info!("Setting up application");
-            
-            // Load configuration
-            let _config = AppConfig::load();
-            
-            // Initialize audio recorder
-            if let Err(e) = init_audio_recorder(None) {
-                error!("Failed to initialize audio recorder: {}", e);
-            }
-            
-            // Initialize text injector
-            if let Err(e) = init_text_injector() {
-                error!("Failed to initialize text injector: {}", e);
-            }
-            
-            // Create system tray
-            if let Err(e) = create_system_tray(&app.handle()) {
-                error!("Failed to create system tray: {}", e);
-            }
-            
-            // Create the wave window if it doesn't exist
-            if app.get_webview_window("wave-window").is_none() {
-                let _wave_window = WebviewWindowBuilder::new(
-                    app,
-                    "wave-window",
-                    WebviewUrl::App("wave-window.html".into()),
-                )
-                .title("VWisper Wave")
-                .inner_size(120.0, 40.0)
-                .min_inner_size(120.0, 40.0)
-                .max_inner_size(300.0, 60.0)
-                .resizable(false)
-                .decorations(false)
-                .transparent(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .visible(false)
-                .build()
-                .expect("Failed to create wave window");
-            }
-            
-            // Start platform-specific key monitoring
-            let app_handle = app.handle().clone();
-            std::thread::spawn(move || {
-                platform::start_platform_key_monitor(app_handle);
+            INIT.call_once(|| {
+                info!("Setting up application");
+                
+                // Load configuration
+                let _config = AppConfig::load();
+                
+                // Initialize audio recorder
+                if let Err(e) = init_audio_recorder(None) {
+                    error!("Failed to initialize audio recorder: {}", e);
+                }
+                
+                // Initialize text injector
+                if let Err(e) = init_text_injector() {
+                    error!("Failed to initialize text injector: {}", e);
+                }
+                
+                // Create system tray
+                if let Err(e) = create_system_tray(&app.handle()) {
+                    error!("Failed to create system tray: {}", e);
+                }
+                
+                // Create the wave window if it doesn't exist
+                if app.get_webview_window("wave-window").is_none() {
+                    info!("Creating wave window");
+                    let _wave_window = WebviewWindowBuilder::new(
+                        app,
+                        "wave-window",
+                        WebviewUrl::App("src/wave-window.html".into()),
+                    )
+                    .title("VWisper Wave")
+                    .inner_size(80.0, 80.0)
+                    .min_inner_size(80.0, 80.0)
+                    .max_inner_size(120.0, 80.0)
+                    .resizable(false)
+                    .decorations(false)
+                    .transparent(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .visible(false)
+                    .build()
+                    .expect("Failed to create wave window");
+                    info!("Wave window created successfully");
+                } else {
+                    info!("Wave window already exists, skipping creation");
+                }
+                
+                // Start platform-specific key monitoring only once
+                if !KEY_MONITORING_STARTED.load(Ordering::Acquire) {
+                    info!("Starting key monitoring");
+                    KEY_MONITORING_STARTED.store(true, Ordering::Release);
+                    let app_handle = app.handle().clone();
+                    std::thread::spawn(move || {
+                        platform::start_platform_key_monitor(app_handle);
+                    });
+                } else {
+                    info!("Key monitoring already started, skipping");
+                }
+                
+                info!("Application setup completed");
             });
-            
-            info!("Application setup completed");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -126,6 +147,9 @@ pub fn run() {
             set_audio_device,
             set_groq_api_key,
             get_current_groq_api_key,
+            debug_wave_windows,
+            reset_wave_window_counter,
+            cancel_processing,
         ])
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())

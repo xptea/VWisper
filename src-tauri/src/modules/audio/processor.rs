@@ -8,9 +8,19 @@ use std::io::Cursor;
 use crate::modules::settings::AppConfig;
 use reqwest::blocking::{Client, multipart};
 use std::fs;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
+use std::sync::atomic::{AtomicBool, Ordering};
+use once_cell::sync::Lazy;
 
+// Global flag to allow user-triggered cancellation of the current processing session
+static CANCEL_PROCESSING: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
 
+/// Request the currently running `AudioProcessor` thread (if any) to cancel immediately.
+/// This simply flips an atomic flag that the processing thread inspects right after the
+/// recording loop ends – before sending any audio to Groq or injecting text.
+pub fn request_cancel_processing() {
+    CANCEL_PROCESSING.store(true, Ordering::Release);
+}
 
 // Simple linear resampler – good enough for speech.
 fn resample_to_16k(input: &[f32], src_rate: u32) -> Vec<f32> {
@@ -79,6 +89,31 @@ impl AudioProcessor {
             }
             
             // After recording ends, send entire session to Groq
+            if CANCEL_PROCESSING.swap(false, Ordering::Acquire) {
+                info!("Processing cancelled by user, discarding audio");
+
+                // Notify the frontend that the transcription was cancelled
+                if let Err(e) = app_handle.emit("transcription-cancelled", ()) {
+                    error!("Failed to emit transcription-cancelled event: {}", e);
+                }
+
+                // Reset window size and hide it
+                if let Some(window) = app_handle.get_webview_window("wave-window") {
+                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                        error!("Failed to reset window size: {}", e);
+                    }
+                    if let Err(e) = window.hide() {
+                        error!("Failed to hide window: {}", e);
+                    }
+                }
+
+                // Reset internal counter so the next session starts cleanly
+                crate::modules::ui::commands::reset_wave_window_counter_internal();
+
+                debug!("Audio processing thread cancelled");
+                return;
+            }
+
             if !session_audio_mono.is_empty() {
                 // Emit processing started event
                 if let Err(e) = app_handle.emit("transcription-started", ()) {
@@ -94,6 +129,19 @@ impl AudioProcessor {
                             error!("Failed to emit transcription-completed event: {}", e);
                         }
                         
+                        // Reset window size and hide after successful processing
+                        if let Some(window) = app_handle.get_webview_window("wave-window") {
+                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                                error!("Failed to reset window size: {}", e);
+                            }
+                            if let Err(e) = window.hide() {
+                                error!("Failed to hide window: {}", e);
+                            }
+                        }
+                        
+                        // Reset window counter
+                        crate::modules::ui::commands::reset_wave_window_counter_internal();
+                        
                         if let Err(e) = inject_text(&text) {
                             error!("Failed to inject text: {}", e);
                         }
@@ -104,6 +152,19 @@ impl AudioProcessor {
                         if let Err(e) = app_handle.emit("transcription-completed", "") {
                             error!("Failed to emit transcription-completed event: {}", e);
                         }
+                        
+                        // Reset window size and hide after empty processing
+                        if let Some(window) = app_handle.get_webview_window("wave-window") {
+                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                                error!("Failed to reset window size: {}", e);
+                            }
+                            if let Err(e) = window.hide() {
+                                error!("Failed to hide window: {}", e);
+                            }
+                        }
+                        
+                        // Reset window counter
+                        crate::modules::ui::commands::reset_wave_window_counter_internal();
                     }
                     Err(e) => {
                         error!("Groq transcription failed: {}", e);
@@ -111,8 +172,40 @@ impl AudioProcessor {
                         if let Err(e) = app_handle.emit("transcription-error", e.to_string()) {
                             error!("Failed to emit transcription-error event: {}", e);
                         }
+                        
+                        // Reset window size and hide after error
+                        if let Some(window) = app_handle.get_webview_window("wave-window") {
+                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                                error!("Failed to reset window size: {}", e);
+                            }
+                            if let Err(e) = window.hide() {
+                                error!("Failed to hide window: {}", e);
+                            }
+                        }
+                        
+                        // Reset window counter
+                        crate::modules::ui::commands::reset_wave_window_counter_internal();
                     }
                 }
+            } else {
+                // No audio captured – still reset window and notify frontend so UI collapses.
+                warn!("No audio captured in session – collapsing window");
+
+                // Inform frontend that processing is done without result
+                if let Err(e) = app_handle.emit("transcription-completed", "") {
+                    error!("Failed to emit empty transcription-completed event: {}", e);
+                }
+
+                if let Some(window) = app_handle.get_webview_window("wave-window") {
+                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                        error!("Failed to reset window size: {}", e);
+                    }
+                    if let Err(e) = window.hide() {
+                        error!("Failed to hide window: {}", e);
+                    }
+                }
+
+                crate::modules::ui::commands::reset_wave_window_counter_internal();
             }
 
             debug!("Audio processing thread ended");

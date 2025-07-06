@@ -23,12 +23,11 @@ html, body {
 }
 
 .bubble {
-  width: 110px;
+  width: 80px;
   height: 30px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgb(0, 0, 0);
   border-radius: 15px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   box-shadow: none;
@@ -37,11 +36,29 @@ html, body {
   position: relative;
   overflow: hidden;
   padding: 3px;
-  transition: width 0.3s ease-in-out, height 0.3s ease-in-out;
+  transition: width 0.3s ease-in-out;
+  transform-origin: left center;
+}
+
+.bubble.processing {
+  width: 120px;
 }
 
 .bubble::before {
   display: none;
+}
+
+.audio-section {
+  flex-shrink: 0;
+  width: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
 }
 
 .waveform-canvas {
@@ -49,6 +66,38 @@ html, body {
   z-index: 2;
   border-radius: 3px;
   background: transparent;
+}
+
+.processing-section {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.processing-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @keyframes pulse {
@@ -60,7 +109,51 @@ html, body {
   }
 }
 
-.bubble.leaving {
-  opacity: 0;
-  transform: translateX(40px);
+/* Cancel button styles */
+.cancel-section {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+}
+
+/* X icon built with two lines */
+.cancel-icon {
+  position: relative;
+  width: 12px;
+  height: 12px;
+}
+
+.cancel-icon::before,
+.cancel-icon::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 1px;
+  transform-origin: center;
+  transition: background-color 0.2s;
+}
+
+.cancel-icon::before {
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.cancel-icon::after {
+  transform: translateX(-50%) rotate(-45deg);
+}
+
+.cancel-section:hover .cancel-icon::before,
+.cancel-section:hover .cancel-icon::after {
+  background: rgba(255, 255, 255, 1);
 } 
