@@ -1,0 +1,66 @@
+.bubble-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: transparent;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  padding-bottom: 20px;
+}
+
+body {
+  /* duplicate rule removed */
+}
+
+html, body {
+  background: transparent !important;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent accidental scrolling that caused duplicated visuals */
+}
+
+.bubble {
+  width: 110px;
+  height: 30px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  border: none;
+  backdrop-filter: none;
+  position: relative;
+  overflow: hidden;
+  padding: 3px;
+  transition: width 0.3s ease-in-out, height 0.3s ease-in-out;
+}
+
+.bubble::before {
+  display: none;
+}
+
+.waveform-canvas {
+  position: relative;
+  z-index: 2;
+  border-radius: 3px;
+  background: transparent;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.bubble.leaving {
+  opacity: 0;
+  transform: translateX(40px);
+} 

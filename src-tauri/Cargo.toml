@@ -1,0 +1,67 @@
+[package]
+name = "vwisper"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "vwisper_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-ico", "image-png"] }
+tauri-plugin-opener = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Cross-platform key monitoring
+device_query = "1.1"
+
+# Audio recording and processing
+cpal = "0.15"
+hound = "3.5"
+
+# Text injection
+enigo = "0.0.14"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Threading and synchronization
+crossbeam-channel = "0.5"
+once_cell = "1.21"
+
+# Logging
+log = "0.4"
+env_logger = "0.10"
+
+# Configuration and directories
+dirs = "5.0"
+
+rubato = "0.14" # simple resampler for converting to 16-kHz
+
+# Add reqwest for Groq API integration
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11 = { version = "2", features = ["xlib"] }
+alsa-sys = "0.3"
+
+[features]
+default = []
+jack = ["jack-sys"]
+
+[target.'cfg(target_os = "linux")'.dependencies.jack-sys]
+version = "0.5"
+optional = true
+
