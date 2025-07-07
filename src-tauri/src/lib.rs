@@ -7,6 +7,7 @@ use std::sync::Once;
 
 mod modules;
 mod platform;
+mod constants;
 
 // Global flag to ensure key monitoring is only started once
 static KEY_MONITORING_STARTED: AtomicBool = AtomicBool::new(false);
@@ -33,6 +34,10 @@ use modules::{
             debug_wave_windows,
             reset_wave_window_counter,
             cancel_processing,
+            load_settings,
+            save_settings,
+            test_groq_api_key,
+            get_audio_levels,
         },
         tray::create_system_tray,
     },
@@ -101,9 +106,9 @@ pub fn run() {
                         WebviewUrl::App("src/wave-window.html".into()),
                     )
                     .title("VWisper Wave")
-                    .inner_size(80.0, 80.0)
-                    .min_inner_size(80.0, 80.0)
-                    .max_inner_size(120.0, 80.0)
+                    .inner_size(140.0, 80.0)
+                    .min_inner_size(140.0, 80.0)
+                    .max_inner_size(185.0, 80.0)
                     .resizable(false)
                     .decorations(false)
                     .transparent(true)
@@ -150,6 +155,10 @@ pub fn run() {
             debug_wave_windows,
             reset_wave_window_counter,
             cancel_processing,
+            load_settings,
+            save_settings,
+            test_groq_api_key,
+            get_audio_levels,
         ])
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())

@@ -11,6 +11,7 @@ use std::fs;
 use tauri::{Emitter, Manager};
 use std::sync::atomic::{AtomicBool, Ordering};
 use once_cell::sync::Lazy;
+use crate::constants::{WAVE_WIDTH_COMPACT, WAVE_HEIGHT};
 
 // Global flag to allow user-triggered cancellation of the current processing session
 static CANCEL_PROCESSING: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
@@ -99,9 +100,14 @@ impl AudioProcessor {
 
                 // Reset window size and hide it
                 if let Some(window) = app_handle.get_webview_window("wave-window") {
-                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                    // Tell the front-end to collapse the pill back to its compact state
+                    let _ = window.emit("wave-reset", ());
+
+                    // Resize to compact, wait for front-end collapse, then hide
+                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
                         error!("Failed to reset window size: {}", e);
                     }
+                    std::thread::sleep(std::time::Duration::from_millis(400));
                     if let Err(e) = window.hide() {
                         error!("Failed to hide window: {}", e);
                     }
@@ -131,9 +137,14 @@ impl AudioProcessor {
                         
                         // Reset window size and hide after successful processing
                         if let Some(window) = app_handle.get_webview_window("wave-window") {
-                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                            // Tell the front-end to collapse the pill back to its compact state
+                            let _ = window.emit("wave-reset", ());
+
+                            // Resize to compact, wait for front-end collapse, then hide
+                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
                                 error!("Failed to reset window size: {}", e);
                             }
+                            std::thread::sleep(std::time::Duration::from_millis(400));
                             if let Err(e) = window.hide() {
                                 error!("Failed to hide window: {}", e);
                             }
@@ -155,9 +166,14 @@ impl AudioProcessor {
                         
                         // Reset window size and hide after empty processing
                         if let Some(window) = app_handle.get_webview_window("wave-window") {
-                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                            // Tell the front-end to collapse the pill back to its compact state
+                            let _ = window.emit("wave-reset", ());
+
+                            // Resize to compact, wait for front-end collapse, then hide
+                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
                                 error!("Failed to reset window size: {}", e);
                             }
+                            std::thread::sleep(std::time::Duration::from_millis(400));
                             if let Err(e) = window.hide() {
                                 error!("Failed to hide window: {}", e);
                             }
@@ -175,9 +191,14 @@ impl AudioProcessor {
                         
                         // Reset window size and hide after error
                         if let Some(window) = app_handle.get_webview_window("wave-window") {
-                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                            // Tell the front-end to collapse the pill back to its compact state
+                            let _ = window.emit("wave-reset", ());
+
+                            // Resize to compact, wait for front-end collapse, then hide
+                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
                                 error!("Failed to reset window size: {}", e);
                             }
+                            std::thread::sleep(std::time::Duration::from_millis(400));
                             if let Err(e) = window.hide() {
                                 error!("Failed to hide window: {}", e);
                             }
@@ -197,9 +218,14 @@ impl AudioProcessor {
                 }
 
                 if let Some(window) = app_handle.get_webview_window("wave-window") {
-                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 80, height: 80 })) {
+                    // Tell the front-end to collapse the pill back to its compact state
+                    let _ = window.emit("wave-reset", ());
+
+                    // Resize to compact, wait for front-end collapse, then hide
+                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
                         error!("Failed to reset window size: {}", e);
                     }
+                    std::thread::sleep(std::time::Duration::from_millis(400));
                     if let Err(e) = window.hide() {
                         error!("Failed to hide window: {}", e);
                     }

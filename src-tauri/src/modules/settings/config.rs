@@ -10,6 +10,8 @@ pub struct AppConfig {
     pub volume_threshold: f32,
     pub processing_duration_ms: u64,
     pub groq_api_key: Option<String>,
+    pub shortcut_enabled: bool,
+    pub auto_start: bool,
 }
 
 impl Default for AppConfig {
@@ -20,6 +22,8 @@ impl Default for AppConfig {
             volume_threshold: 0.005,
             processing_duration_ms: 4000,
             groq_api_key: None,
+            shortcut_enabled: true,
+            auto_start: false,
         }
     }
 }

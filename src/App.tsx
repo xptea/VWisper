@@ -1,71 +1,240 @@
-import { useState, useEffect } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+
+/**
+ * UI states for the pill component.
+ */
+enum UIState {
+  Recording = "recording",
+  Loading = "loading",
+  Success = "success",
+  Error = "error",
+}
+
+/**
+ * App-wide constants
+ */
+const BAR_COUNT = 10;
+const BAR_MIN_HEIGHT = 5; // px
+const BAR_MAX_HEIGHT = 20; // px (min + random range)
+const ICON_EXIT_DURATION = 300; // ms
+const RESULT_DISPLAY_DURATION = 1200; // ms
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  /* ------------------------------------------------------------------
+   * State
+   * ------------------------------------------------------------------ */
+  const [uiState, setUiState] = useState<UIState>(UIState.Recording);
+  const [iconsExiting, setIconsExiting] = useState(false);
+  const [barHeights, setBarHeights] = useState<number[]>(
+    Array(BAR_COUNT).fill(BAR_MIN_HEIGHT)
+  );
 
+  /* ------------------------------------------------------------------
+   * Derived values
+   * ------------------------------------------------------------------ */
+  const isIconsVisible =
+    (uiState === UIState.Loading || uiState === UIState.Success || uiState === UIState.Error) &&
+    !iconsExiting;
+  const isBarAnimated = uiState === UIState.Recording;
+  const isPillExpanded =
+    uiState === UIState.Loading || uiState === UIState.Success || uiState === UIState.Error || iconsExiting;
+
+  /* ------------------------------------------------------------------
+   * Effects
+   * ------------------------------------------------------------------ */
+  // Setup event listeners for backend communication
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code === "ControlRight") {
-        event.preventDefault();
-        invoke("show_wave_window");
-      }
+    const setupListeners = async () => {
+      // Listen for recording events from backend
+      await listen("recording-started", () => {
+        setUiState(UIState.Recording);
+      });
+
+      await listen("recording-stopped", () => {
+        setUiState(UIState.Loading);
+      });
+
+      await listen("transcription-completed", (event) => {
+        const text = event.payload as string;
+        console.log("Transcription completed:", text);
+        setUiState(UIState.Success);
+        // The text will be injected by the backend (Enigo)
+      });
+
+      await listen("transcription-error", (event) => {
+        const error = event.payload as string;
+        console.error("Transcription error:", error);
+        setUiState(UIState.Error);
+      });
+
+      await listen("wave-reset", () => {
+        setIconsExiting(false); 
+        setUiState(UIState.Recording);
+      });
     };
 
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.code === "ControlRight") {
-        invoke("hide_wave_window");
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("keyup", handleKeyUp);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("keyup", handleKeyUp);
-    };
+    setupListeners();
   }, []);
 
-  async function greet() {
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  // Animate bars while recording; stop and reset heights otherwise
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    const SENSITIVITY = 5.0; // Increase for more responsive bars
 
-  return (
-    <main className="container">
-      <h1>VWisper</h1>
+    if (isBarAnimated) {
+      // Listen for real-time audio data from backend
+      const setupAudioListener = async () => {
+        unlisten = await listen<{ samples: number[] }>("audio-data", (event) => {
+          const { samples } = event.payload as { samples: number[] };
+          if (samples && samples.length > 0) {
+            // Map the samples (usually 12) to the number of bars (BAR_COUNT)
+            let mapped = samples.slice(0, BAR_COUNT);
+            while (mapped.length < BAR_COUNT) mapped.push(0);
+            // Scale to bar height range with sensitivity
+            const scaled = mapped.map(level => {
+              const sensitiveLevel = Math.min(level * SENSITIVITY, 1.0);
+              // If the sensitive level is very low, keep the bar at minimum height (dot)
+              if (sensitiveLevel < 0.05) return BAR_MIN_HEIGHT;
+              return BAR_MIN_HEIGHT + (sensitiveLevel * (BAR_MAX_HEIGHT - BAR_MIN_HEIGHT));
+            });
+            setBarHeights(scaled);
+          }
+        });
+      };
+      setupAudioListener();
+    } else if (uiState === UIState.Loading) {
+      // In loading state, show tiny dots
+      setBarHeights(Array(BAR_COUNT).fill(BAR_MIN_HEIGHT));
+    } else {
+      // Reset bars to minimum height when not animating
+      setBarHeights(Array(BAR_COUNT).fill(BAR_MIN_HEIGHT));
+    }
 
-      <div className="row">
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Hold Control key to show wave window</p>
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [isBarAnimated, uiState]);
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
+  /* ------------------------------------------------------------------
+   * Helpers
+   * ------------------------------------------------------------------ */
+  const resetToRecording = () => {
+    setIconsExiting(true);
+    setTimeout(() => {
+      setUiState(UIState.Recording);
+      setIconsExiting(false);
+    }, ICON_EXIT_DURATION);
+  };
+
+  /* Reset to recording after success/error */
+  useEffect(() => {
+    if (uiState === UIState.Success || uiState === UIState.Error) {
+      const t = setTimeout(resetToRecording, RESULT_DISPLAY_DURATION);
+      return () => clearTimeout(t);
+    }
+  }, [uiState]);
+
+  /* ------------------------------------------------------------------
+   * Render helpers
+   * ------------------------------------------------------------------ */
+  const renderLeftIcon = () => {
+    if (!isIconsVisible) return null;
+    return (
+      <button
+        aria-label="Stop"
+        onClick={resetToRecording}
+        className="w-5 h-5 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center focus:outline-none transition-transform duration-200"
       >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+        <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+          <rect x="5" y="5" width="10" height="10" rx="2" />
+        </svg>
+      </button>
+    );
+  };
+
+  const renderRightIcon = () => {
+    switch (uiState) {
+      case UIState.Loading:
+        return (
+          <div className="w-4 h-4 border-2 border-gray-400 border-t-amber-500 rounded-full animate-spin" />
+        );
+      case UIState.Success:
+        return (
+          <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        );
+      case UIState.Error:
+        return (
+          <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        );
+      default:
+        return null;
+    }
+  };
+
+  /* ------------------------------------------------------------------
+   * JSX
+   * ------------------------------------------------------------------ */
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center">
+      {/* Pill */}
+      <div
+        className={`bg-[#18181b] rounded-full border border-[#27272a] flex items-center justify-center transition-all duration-300 relative overflow-hidden ${
+          isPillExpanded ? "px-3" : "px-4"
+        } py-2`}
+        style={{ minWidth: isPillExpanded ? 130 : 110, minHeight: 28, maxWidth: 160 }}
+      >
+        {/* Left Icon */}
+        <div
+          className={`flex items-center justify-center transition-all duration-300 ${
+            isIconsVisible || iconsExiting
+              ? iconsExiting
+                ? "opacity-0 translate-x-3 pointer-events-none"
+                : "opacity-100 translate-x-0 ml-0 mr-1.5"
+              : "opacity-0 -translate-x-3 ml-[-20px] mr-0 pointer-events-none"
+          }`}
+          style={{ width: 20, height: 20 }}
+        >
+          {renderLeftIcon()}
+        </div>
+
+        {/* Audio Bars */}
+        <div className="relative" style={{ width: BAR_COUNT * 6, height: 24 }}>
+          {barHeights.map((h, i) => (
+            <div
+              key={i}
+              className={`bg-white rounded-full transition-all duration-200 absolute left-0 ${
+                isBarAnimated ? "" : "opacity-60"
+              }`}
+              style={{
+                width: 4,
+                height: h,
+                left: i * 6,
+                top: "50%",
+                transform: "translateY(-50%)",
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Right Icon */}
+        <div
+          className={`flex items-center justify-center transition-all duration-300 ${
+            isIconsVisible || iconsExiting
+              ? iconsExiting
+                ? "opacity-0 -translate-x-3 pointer-events-none"
+                : "opacity-100 translate-x-0 ml-1.5 mr-0"
+              : "opacity-0 translate-x-3 mr-[-20px] ml-0 pointer-events-none"
+          }`}
+          style={{ width: 20, height: 20 }}
+        >
+          {renderRightIcon()}
+        </div>
+      </div>
     </main>
   );
 }
