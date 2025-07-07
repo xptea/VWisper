@@ -1,7 +1,11 @@
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import React, { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 interface AppSettings {
+  sample_rate: number;
+  volume_threshold: number;
+  processing_duration_ms: number;
   groq_api_key?: string;
   shortcut_enabled: boolean;
   auto_start: boolean;
@@ -9,6 +13,9 @@ interface AppSettings {
 
 const Settings: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>({
+    sample_rate: 16000,
+    volume_threshold: 0.005,
+    processing_duration_ms: 4000,
     groq_api_key: "",
     shortcut_enabled: true,
     auto_start: false,
@@ -93,25 +100,25 @@ const Settings: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+    <div className="min-h-screen bg-black text-white p-6">
       <div className="max-w-2xl mx-auto">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-lg p-6">
+          <h1 className="text-2xl font-bold text-white mb-6">
             VWisper Settings
           </h1>
 
           {message && (
             <div className={`mb-4 p-3 rounded-lg ${
               message.type === 'success' 
-                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                ? 'bg-green-900 text-green-300 border border-green-800'
+                : 'bg-red-900 text-red-300 border border-red-800'
             }`}>
               {message.text}
             </div>

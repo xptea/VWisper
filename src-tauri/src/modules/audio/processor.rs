@@ -11,6 +11,9 @@ use tauri::{Emitter, Manager};
 use std::sync::atomic::{AtomicBool, Ordering};
 use once_cell::sync::Lazy;
 use crate::constants::{WAVE_WIDTH_COMPACT, WAVE_HEIGHT};
+use crate::modules::storage::{UsageStats, AnalyticsData, RecordingSession};
+use uuid::Uuid;
+use chrono::Utc;
 
 // Global flag to allow user-triggered cancellation of the current processing session
 static CANCEL_PROCESSING: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
@@ -170,6 +173,10 @@ impl AudioProcessor {
             }
 
             if !session_audio_mono.is_empty() {
+                // Calculate audio duration
+                let audio_duration_ms = (session_audio_mono.len() as f64 / sample_rate as f64 * 1000.0) as u64;
+                let processing_start = std::time::Instant::now();
+                
                 // Emit processing started event
                 if let Err(e) = app_handle.emit("transcription-started", ()) {
                     error!("Failed to emit transcription-started event: {}", e);
@@ -177,7 +184,11 @@ impl AudioProcessor {
                 
                 match transcribe_with_groq(&session_audio_mono, sample_rate) {
                     Ok(text) if !text.trim().is_empty() => {
+                        let processing_duration = processing_start.elapsed().as_millis() as u64;
                         info!("Final transcript: {}", text);
+                        
+                        // Record successful session
+                        record_session(audio_duration_ms, processing_duration, &text, true, None);
                         
                         // Emit transcription completed event
                         if let Err(e) = app_handle.emit("transcription-completed", &text) {
@@ -212,7 +223,12 @@ impl AudioProcessor {
                         }
                     }
                     Ok(_) => {
+                        let processing_duration = processing_start.elapsed().as_millis() as u64;
                         info!("No transcript generated.");
+                        
+                        // Record empty session
+                        record_session(audio_duration_ms, processing_duration, "", true, Some("Empty transcription".to_string()));
+                        
                         // Emit transcription completed with empty text
                         if let Err(e) = app_handle.emit("transcription-completed", "") {
                             error!("Failed to emit transcription-completed event: {}", e);
@@ -237,7 +253,11 @@ impl AudioProcessor {
                         crate::modules::ui::commands::reset_wave_window_counter_internal();
                     }
                     Err(e) => {
+                        let processing_duration = processing_start.elapsed().as_millis() as u64;
                         error!("Groq transcription failed: {}", e);
+                        
+                        // Record failed session
+                        record_session(audio_duration_ms, processing_duration, "", false, Some(e.to_string()));
                         
                         // Play error sound for transcription failure
                         crate::modules::audio::sound::play_error_sound();
@@ -368,4 +388,35 @@ fn transcribe_with_groq(audio_mono: &[f32], src_rate: u32) -> Result<String, Box
     info!("Groq STT round-trip: {:?}", elapsed);
 
     Ok(resp.text()?)
+}
+
+/// Record a transcription session for analytics
+fn record_session(
+    audio_duration_ms: u64,
+    processing_duration_ms: u64,
+    transcription: &str,
+    success: bool,
+    error_message: Option<String>
+) {
+    let session = RecordingSession {
+        id: Uuid::new_v4().to_string(),
+        timestamp: Utc::now(),
+        duration_ms: processing_duration_ms,
+        audio_length_ms: audio_duration_ms,
+        transcription_length: transcription.len(),
+        processing_time_ms: processing_duration_ms,
+        success,
+        error_message,
+    };
+
+    // Update usage stats
+    let mut stats = UsageStats::load();
+    stats.add_recording(session.clone());
+
+    // Update analytics
+    let mut analytics = AnalyticsData::load();
+    analytics.update_with_recording(audio_duration_ms, transcription.len());
+
+    info!("Recorded session: {} chars, {}ms duration, success: {}", 
+        transcription.len(), audio_duration_ms, success);
 }
