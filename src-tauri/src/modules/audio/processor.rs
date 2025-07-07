@@ -4,7 +4,6 @@ use std::time::Duration;
 use log::{info, error, debug, warn};
 use crate::modules::core::text_injection::inject_text;
 use super::{collect_audio_chunk, send_audio_visualization, is_global_recording};
-use std::io::Cursor;
 use crate::modules::settings::AppConfig;
 use reqwest::blocking::{Client, multipart};
 use std::fs;
@@ -40,6 +39,53 @@ fn resample_to_16k(input: &[f32], src_rate: u32) -> Vec<f32> {
         out.push(s0 + (s1 - s0) * frac);
     }
     out
+}
+
+/// Preprocess audio for optimal speech recognition quality
+/// Applies normalization, noise reduction, and dynamic range optimization
+fn preprocess_audio_for_speech(samples: &[f32]) -> Vec<f32> {
+    if samples.is_empty() {
+        return Vec::new();
+    }
+    
+    let mut processed = samples.to_vec();
+    
+    // 1. Remove DC offset (center around zero)
+    let mean = processed.iter().sum::<f32>() / processed.len() as f32;
+    for sample in &mut processed {
+        *sample -= mean;
+    }
+    
+    // 2. Apply normalization with RMS-based scaling for consistent loudness
+    let rms = (processed.iter().map(|&x| x * x).sum::<f32>() / processed.len() as f32).sqrt();
+    if rms > 0.0 {
+        let target_rms = 0.1; // Target RMS level for speech
+        let scale = target_rms / rms;
+        for sample in &mut processed {
+            *sample *= scale;
+        }
+    }
+    
+    // 3. Simple high-pass filter to remove low-frequency noise (< 80 Hz)
+    // This helps remove rumble and background noise common in recordings
+    let alpha = 0.98; // High-pass filter coefficient
+    let mut prev_input = 0.0;
+    let mut prev_output = 0.0;
+    
+    for sample in &mut processed {
+        let input = *sample;
+        let output = alpha * (prev_output + input - prev_input);
+        *sample = output;
+        prev_input = input;
+        prev_output = output;
+    }
+    
+    // 4. Soft limiting to prevent clipping while maintaining dynamics
+    for sample in &mut processed {
+        *sample = sample.clamp(-0.95, 0.95);
+    }
+    
+    processed
 }
 
 pub struct AudioProcessor {
@@ -81,10 +127,14 @@ impl AudioProcessor {
                 
                 send_audio_visualization(&app_handle, &chunk);
                 
-                // Convert to mono and collect
-                session_audio_mono.extend(
-                    chunk.chunks(2).map(|c| if c.len()==2 {0.5*(c[0]+c[1])} else {c[0]})
-                );
+                // Convert to mono (audio from CPAL is typically interleaved if stereo)
+                // For most microphones, input is already mono, but some setups might give stereo
+                // We'll assume if we get pairs, it's stereo and average them
+                let mono_chunk: Vec<f32> = chunk.chunks(2)
+                    .map(|c| if c.len() == 2 { 0.5 * (c[0] + c[1]) } else { c[0] })
+                    .collect();
+                
+                session_audio_mono.extend(mono_chunk);
                 
                 thread::sleep(Duration::from_millis(20));
             }
@@ -249,21 +299,25 @@ fn transcribe_with_groq(audio_mono: &[f32], src_rate: u32) -> Result<String, Box
         return Ok(String::new());
     }
 
-    // Resample to 16 kHz mono as required by Groq
+    // Resample to 16 kHz mono as required by Groq (matching ffmpeg -ar 16000 -ac 1)
     let samples_16k = resample_to_16k(audio_mono, src_rate);
 
-    // Encode to WAV in-memory
+    // Apply audio preprocessing for better speech recognition quality
+    let processed_samples = preprocess_audio_for_speech(&samples_16k);
+
+    // Encode to WAV with exact specifications: 16kHz, mono (matching ffmpeg -ar 16000 -ac 1)
+    // Using WAV format for reliability while we ensure optimal preprocessing
     let wav_bytes = {
-        let mut cursor = Cursor::new(Vec::<u8>::new());
+        let mut cursor = std::io::Cursor::new(Vec::<u8>::new());
         {
             let spec = hound::WavSpec {
-                channels: 1,
-                sample_rate: 16_000,
-                bits_per_sample: 16,
+                channels: 1,           // mono (-ac 1)
+                sample_rate: 16_000,   // 16kHz (-ar 16000)
+                bits_per_sample: 16,   // 16-bit samples
                 sample_format: hound::SampleFormat::Int,
             };
             let mut writer = hound::WavWriter::new(&mut cursor, spec)?;
-            for &s in &samples_16k {
+            for &s in &processed_samples {
                 let v = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                 writer.write_sample(v)?;
             }
@@ -277,7 +331,7 @@ fn transcribe_with_groq(audio_mono: &[f32], src_rate: u32) -> Result<String, Box
         .or_else(|| AppConfig::load().groq_api_key)
         .ok_or("Groq API key not configured")?;
 
-    // Build multipart request
+    // Build multipart request with WAV file (16kHz, mono as specified)
     let part = multipart::Part::bytes(wav_bytes)
         .file_name("audio.wav")
         .mime_str("audio/wav")?;
@@ -306,4 +360,4 @@ fn transcribe_with_groq(audio_mono: &[f32], src_rate: u32) -> Result<String, Box
     info!("Groq STT round-trip: {:?}", elapsed);
 
     Ok(resp.text()?)
-} 
+}

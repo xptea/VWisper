@@ -1,1 +1,41 @@
 @import "tailwindcss";
+
+/* Remove default browser styling that could cause borders */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  overflow: hidden;
+}
+
+#root {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Ensure no unwanted borders on interactive elements */
+button, input, select, textarea {
+  border: none;
+  outline: none;
+}
+
+/* Remove any potential webkit appearance borders */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+textarea,
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}

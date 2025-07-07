@@ -39,6 +39,7 @@ fn create_wave_window(app: &tauri::AppHandle) -> Result<(), String> {
     .always_on_top(true)
     .skip_taskbar(false)
     .visible(false)
+    .theme(Some(tauri::Theme::Dark))
     .build() {
         Ok(_) => Ok(()),
         Err(e) => Err(e.to_string()),

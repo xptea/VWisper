@@ -24,7 +24,8 @@
         "resizable": true,
         "visible": false,
         "center": true,
-        "url": "src/settings.html"
+        "url": "src/settings.html",
+        "shadow": false
       }
     ],
     "security": {

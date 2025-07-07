@@ -112,9 +112,11 @@ pub fn run() {
                     .resizable(false)
                     .decorations(false)
                     .transparent(true)
+                    .shadow(false)
                     .always_on_top(true)
                     .skip_taskbar(true)
                     .visible(false)
+                    .theme(Some(tauri::Theme::Dark))
                     .build()
                     .expect("Failed to create wave window");
                     info!("Wave window created successfully");

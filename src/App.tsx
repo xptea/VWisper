@@ -16,7 +16,7 @@ enum UIState {
  */
 const BAR_COUNT = 10;
 const BAR_MIN_HEIGHT = 5; // px
-const BAR_MAX_HEIGHT = 20; // px (min + random range)
+const BAR_MAX_HEIGHT = 20; // px
 const ICON_EXIT_DURATION = 300; // ms
 const RESULT_DISPLAY_DURATION = 1200; // ms
 
@@ -183,7 +183,7 @@ function App() {
     <main className="min-h-screen flex flex-col items-center justify-center">
       {/* Pill */}
       <div
-        className={`bg-[#18181b] rounded-full border border-[#27272a] flex items-center justify-center transition-all duration-300 relative overflow-hidden ${
+        className={`bg-black rounded-full flex items-center justify-center transition-all duration-300 relative overflow-hidden ${
           isPillExpanded ? "px-3" : "px-4"
         } py-2`}
         style={{ minWidth: isPillExpanded ? 130 : 110, minHeight: 28, maxWidth: 160 }}
