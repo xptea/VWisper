@@ -109,10 +109,9 @@ impl AudioProcessor {
         
         thread::spawn(move || {
             let mut session_audio_mono = Vec::new();
-            let chunk_duration_ms = 100; // Visualisation refresh rate
+            let chunk_duration_ms = 100; 
 
             loop {
-                // Check if we should continue processing
                 if !is_global_recording() {
                     debug!("Recording stopped, ending audio processing");
                     break;
@@ -205,6 +204,11 @@ impl AudioProcessor {
                         
                         if let Err(e) = inject_text(&text) {
                             error!("Failed to inject text: {}", e);
+                            // Play error sound if text injection fails
+                            crate::modules::audio::sound::play_error_sound();
+                        } else {
+                            // Play ending sound after successful text injection
+                            crate::modules::audio::sound::play_ending_sound();
                         }
                     }
                     Ok(_) => {
@@ -234,6 +238,10 @@ impl AudioProcessor {
                     }
                     Err(e) => {
                         error!("Groq transcription failed: {}", e);
+                        
+                        // Play error sound for transcription failure
+                        crate::modules::audio::sound::play_error_sound();
+                        
                         // Emit transcription error event
                         if let Err(e) = app_handle.emit("transcription-error", e.to_string()) {
                             error!("Failed to emit transcription-error event: {}", e);

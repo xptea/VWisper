@@ -34,9 +34,6 @@ hound = "3.5"
 # Text injection
 enigo = "0.5.0"
 
-# Async runtime
-tokio = { version = "1", features = ["full"] }
-
 # Threading and synchronization
 crossbeam-channel = "0.5"
 once_cell = "1.21"
@@ -47,8 +44,6 @@ env_logger = "0.10"
 
 # Configuration and directories
 dirs = "5.0"
-
-rubato = "0.14" # simple resampler for converting to 16-kHz
 
 # Add reqwest for Groq API integration
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }

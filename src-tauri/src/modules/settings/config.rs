@@ -5,7 +5,6 @@ use log::info;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub audio_device: Option<String>,
     pub sample_rate: u32,
     pub volume_threshold: f32,
     pub processing_duration_ms: u64,
@@ -17,7 +16,6 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            audio_device: None, // Use default device
             sample_rate: 16000,
             volume_threshold: 0.005,
             processing_duration_ms: 4000,

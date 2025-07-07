@@ -27,8 +27,6 @@ use modules::{
             start_recording,
             stop_recording,
             toggle_recording,
-            get_audio_devices,
-            set_audio_device,
             set_groq_api_key,
             get_current_groq_api_key,
             debug_wave_windows,
@@ -37,7 +35,6 @@ use modules::{
             load_settings,
             save_settings,
             test_groq_api_key,
-            get_audio_levels,
         },
         tray::create_system_tray,
     },
@@ -150,8 +147,6 @@ pub fn run() {
             start_recording,
             stop_recording,
             toggle_recording,
-            get_audio_devices,
-            set_audio_device,
             set_groq_api_key,
             get_current_groq_api_key,
             debug_wave_windows,
@@ -160,7 +155,6 @@ pub fn run() {
             load_settings,
             save_settings,
             test_groq_api_key,
-            get_audio_levels,
         ])
         .plugin(tauri_plugin_opener::init())
         .run(tauri::generate_context!())

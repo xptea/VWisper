@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 
 interface AppSettings {
   groq_api_key?: string;
-  audio_device?: string;
   shortcut_enabled: boolean;
   auto_start: boolean;
 }
@@ -11,7 +10,6 @@ interface AppSettings {
 const Settings: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>({
     groq_api_key: "",
-    audio_device: "",
     shortcut_enabled: true,
     auto_start: false,
   });
@@ -215,24 +213,6 @@ const Settings: React.FC = () => {
                   Start VWisper automatically on system startup
                 </span>
               </label>
-            </div>
-
-            {/* Audio Device (placeholder for future implementation) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Audio Device
-              </label>
-              <select
-                value={settings.audio_device || "default"}
-                onChange={(e) => setSettings(prev => ({ 
-                  ...prev, 
-                  audio_device: e.target.value === "default" ? undefined : e.target.value 
-                }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="default">Default Microphone</option>
-                {/* Future: populate with actual audio devices */}
-              </select>
             </div>
 
             {/* Action Buttons */}

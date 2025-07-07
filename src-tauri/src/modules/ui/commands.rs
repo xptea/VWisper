@@ -8,7 +8,6 @@ use crate::modules::{
         is_global_recording,
         AudioProcessor
     },
-    audio::devices::AudioDeviceManager,
     settings::AppConfig,
     audio::processor::request_cancel_processing,
 };
@@ -137,48 +136,6 @@ pub fn toggle_wave_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn get_audio_devices() -> Result<Vec<crate::modules::audio::devices::AudioDeviceInfo>, String> {
-    let device_manager = AudioDeviceManager::new();
-    match device_manager.get_input_devices() {
-        Ok(devices) => {
-            info!("Found {} audio devices", devices.len());
-            Ok(devices)
-        }
-        Err(e) => {
-            error!("Failed to get audio devices: {}", e);
-            Err(e.to_string())
-        }
-    }
-}
-
-#[tauri::command]
-pub fn set_audio_device(device_name: String) -> Result<(), String> {
-    info!("Setting audio device to: {}", device_name);
-    
-    let device_manager = AudioDeviceManager::new();
-    let device = match device_manager.get_device_by_name(&device_name) {
-        Ok(Some(device)) => device,
-        Ok(None) => {
-            error!("Device not found: {}", device_name);
-            return Err(format!("Device not found: {}", device_name));
-        }
-        Err(e) => {
-            error!("Failed to get device: {}", e);
-            return Err(e.to_string());
-        }
-    };
-    
-    // Reinitialize audio recorder with new device
-    if let Err(e) = crate::modules::audio::init_audio_recorder(Some(device)) {
-        error!("Failed to reinitialize audio recorder: {}", e);
-        return Err(e.to_string());
-    }
-    
-    info!("Audio device set successfully");
-    Ok(())
-}
-
 fn start_speech_to_text_session(app_handle: tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting speech-to-text session");
     
@@ -276,6 +233,9 @@ pub fn start_recording(app: tauri::AppHandle) -> Result<(), String> {
         info!("Already recording, skipping start");
         return Ok(());
     }
+    
+    // Play start sound
+    crate::modules::audio::sound::play_start_sound();
     
     // Start audio recording and speech-to-text processing
     if let Err(e) = start_speech_to_text_session(app.clone()) {
@@ -429,7 +389,6 @@ pub fn load_settings() -> Result<crate::modules::settings::AppConfig, String> {
 #[derive(serde::Deserialize)]
 pub struct SettingsPayload {
     pub groq_api_key: Option<String>,
-    pub audio_device: Option<String>,
     pub shortcut_enabled: bool,
     pub auto_start: bool,
 }
@@ -439,7 +398,6 @@ pub struct SettingsPayload {
 pub fn save_settings(settings: SettingsPayload) -> Result<(), String> {
     let mut cfg = crate::modules::settings::AppConfig::load();
     cfg.groq_api_key = settings.groq_api_key;
-    cfg.audio_device = settings.audio_device;
     cfg.shortcut_enabled = settings.shortcut_enabled;
     cfg.auto_start = settings.auto_start;
     cfg.save().map_err(|e| e.to_string())
@@ -458,32 +416,4 @@ pub fn test_groq_api_key(api_key: String) -> Result<bool, String> {
         Ok(resp) => Ok(resp.status().is_success()),
         Err(e) => Err(e.to_string()),
     }
-}
-
-/// Provide a short vector of audio levels for the UI visualizer (values 0.0..1.0).
-#[tauri::command]
-pub fn get_audio_levels() -> Result<Vec<f32>, String> {
-    use crate::modules::audio::get_global_audio_receiver;
-
-    if let Some(receiver) = get_global_audio_receiver() {
-        if let Ok(chunk) = receiver.try_recv() {
-            // Sample 10 evenly spaced points (or fewer if chunk short)
-            let step = (chunk.len() / 10).max(1);
-            let mut samples: Vec<f32> = chunk
-                .iter()
-                .step_by(step)
-                .take(10)
-                .map(|&x| (x.abs() * 10.0).min(1.0))
-                .collect();
-
-            // Ensure vector has length 10 for front-end consistency.
-            while samples.len() < 10 {
-                samples.push(0.0);
-            }
-
-            return Ok(samples);
-        }
-    }
-
-    Ok(Vec::new())
 } 

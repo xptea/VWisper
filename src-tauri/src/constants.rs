@@ -6,4 +6,4 @@ pub const WAVE_WIDTH_COMPACT: i32 = 200;
 pub const WAVE_HEIGHT: i32 = 80;
 
 // Expanded (processing) pill width
-pub const WAVE_WIDTH_EXPANDED: i32 = 185; 
+pub const WAVE_WIDTH_EXPANDED: i32 = 250; 
