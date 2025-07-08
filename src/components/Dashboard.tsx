@@ -56,7 +56,6 @@ interface AnalyticsData {
 interface AppSettings {
   sample_rate: number;
   volume_threshold: number;
-  processing_duration_ms: number;
   groq_api_key?: string;
   shortcut_enabled: boolean;
   auto_start: boolean;

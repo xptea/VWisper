@@ -18,7 +18,6 @@ import {
 interface AppSettings {
   sample_rate: number;
   volume_threshold: number;
-  processing_duration_ms: number;
   groq_api_key?: string;
   shortcut_enabled: boolean;
   auto_start: boolean;
@@ -229,18 +228,6 @@ const Settings: React.FC<SettingsProps> = ({
                 className="bg-muted/50"
               />
               <p className="text-xs text-muted-foreground">Minimum volume to start recording</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="processingDuration" className="text-muted-foreground">Processing Duration (ms)</Label>
-              <Input
-                id="processingDuration"
-                type="number"
-                value={settings?.processing_duration_ms || 5000}
-                disabled={true}
-                className="bg-muted/50"
-              />
-              <p className="text-xs text-muted-foreground">Maximum recording duration</p>
             </div>
           </CardContent>
         </Card>

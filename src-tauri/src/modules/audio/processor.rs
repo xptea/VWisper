@@ -45,7 +45,7 @@ fn resample_to_16k(input: &[f32], src_rate: u32) -> Vec<f32> {
 }
 
 /// Preprocess audio for optimal speech recognition quality
-/// Applies normalization, noise reduction, and dynamic range optimization
+/// Minimal processing to preserve speech clarity
 fn preprocess_audio_for_speech(samples: &[f32]) -> Vec<f32> {
     if samples.is_empty() {
         return Vec::new();
@@ -53,37 +53,35 @@ fn preprocess_audio_for_speech(samples: &[f32]) -> Vec<f32> {
     
     let mut processed = samples.to_vec();
     
-    // 1. Remove DC offset (center around zero)
+    // 1. Remove DC offset only (this is always good)
     let mean = processed.iter().sum::<f32>() / processed.len() as f32;
     for sample in &mut processed {
         *sample -= mean;
     }
     
-    // 2. Apply normalization with RMS-based scaling for consistent loudness
-    let rms = (processed.iter().map(|&x| x * x).sum::<f32>() / processed.len() as f32).sqrt();
-    if rms > 0.0 {
-        let target_rms = 0.1; // Target RMS level for speech
-        let scale = target_rms / rms;
-        for sample in &mut processed {
-            *sample *= scale;
+    // 2. Gentle normalization - find peak and normalize if too quiet or too loud
+    let peak = processed.iter().map(|&x| x.abs()).fold(0.0, f32::max);
+    if peak > 0.0 {
+        // Only normalize if the audio is very quiet (peak < 0.1) or very loud (peak > 0.9)
+        let scale = if peak < 0.1 {
+            // Boost quiet audio to 0.3 peak
+            0.3 / peak
+        } else if peak > 0.9 {
+            // Reduce loud audio to 0.8 peak
+            0.8 / peak
+        } else {
+            // Leave normal levels alone
+            1.0
+        };
+        
+        if scale != 1.0 {
+            for sample in &mut processed {
+                *sample *= scale;
+            }
         }
     }
     
-    // 3. Simple high-pass filter to remove low-frequency noise (< 80 Hz)
-    // This helps remove rumble and background noise common in recordings
-    let alpha = 0.98; // High-pass filter coefficient
-    let mut prev_input = 0.0;
-    let mut prev_output = 0.0;
-    
-    for sample in &mut processed {
-        let input = *sample;
-        let output = alpha * (prev_output + input - prev_input);
-        *sample = output;
-        prev_input = input;
-        prev_output = output;
-    }
-    
-    // 4. Soft limiting to prevent clipping while maintaining dynamics
+    // 3. Only apply soft limiting to prevent hard clipping - no other filtering
     for sample in &mut processed {
         *sample = sample.clamp(-0.95, 0.95);
     }
@@ -195,22 +193,9 @@ impl AudioProcessor {
                             error!("Failed to emit transcription-completed event: {}", e);
                         }
                         
-                        // Inject text and play sound immediately after successful transcription
-                        if let Err(e) = inject_text(&text) {
-                            error!("Failed to inject text: {}", e);
-                            // Emit event for frontend to play error sound
-                            if let Err(e) = app_handle.emit("play-sound", "error") {
-                                error!("Failed to emit play-sound event for error: {}", e);
-                            }
-                        } else {
-                            // Emit event for frontend to play ending sound
-                            if let Err(e) = app_handle.emit("play-sound", "ending") {
-                                error!("Failed to emit play-sound event for ending: {}", e);
-                            }
-                        }
-                        
-                        // Reset window size and hide after successful processing (concurrent with sound)
+                        // Reset window size and hide BEFORE injecting text (so text goes to the right place)
                         let window_handle = app_handle.clone();
+                        let text_to_inject = text.clone();
                         std::thread::spawn(move || {
                             if let Some(window) = window_handle.get_webview_window("wave-window") {
                                 // Tell the front-end to collapse the pill back to its compact state
@@ -223,6 +208,25 @@ impl AudioProcessor {
                                 std::thread::sleep(std::time::Duration::from_millis(400));
                                 if let Err(e) = window.hide() {
                                     error!("Failed to hide window: {}", e);
+                                }
+                                
+                                info!("Wave window hidden, now injecting text");
+                                
+                                // Add extra delay to ensure window focus is released and user can focus target app
+                                std::thread::sleep(std::time::Duration::from_millis(200));
+                                
+                                // Now inject text after the window is hidden
+                                if let Err(e) = inject_text(&text_to_inject) {
+                                    error!("Failed to inject text: {}", e);
+                                    // Emit event for frontend to play error sound
+                                    if let Err(e) = window_handle.emit("play-sound", "error") {
+                                        error!("Failed to emit play-sound event for error: {}", e);
+                                    }
+                                } else {
+                                    // Emit event for frontend to play ending sound
+                                    if let Err(e) = window_handle.emit("play-sound", "ending") {
+                                        error!("Failed to emit play-sound event for ending: {}", e);
+                                    }
                                 }
                             }
                             
@@ -376,9 +380,11 @@ fn transcribe_with_groq(audio_mono: &[f32], src_rate: u32) -> Result<String, Box
 
     let form = multipart::Form::new()
         .part("file", part)
-        .text("model", "distil-whisper-large-v3-en")
+        .text("model", "distil-whisper-large-v3-en")  // Keeping your model choice
         .text("response_format", "text")
-        .text("language", "en");
+        .text("language", "en")
+        .text("temperature", "0.0") 
+        .text("prompt", "Transcribe this speech with correct spelling, grammar, punctuation, and capitalization. Smooth out speech flow by removing filler words (e.g., 'um', 'uh', 'like'), applying natural corrections (e.g., 'wait, I meant'), and fixing verbal errors. Capitalize proper nouns and sentence beginnings. Write numbers and dates in standard written form when appropriate.");
 
     let client = Client::new();
     let start = std::time::Instant::now();

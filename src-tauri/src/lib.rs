@@ -1,7 +1,7 @@
 #![allow(unexpected_cfgs)]
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
-use log::{info, error};
+use log::{info, error, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Once;
 
@@ -49,6 +49,8 @@ use modules::{
             open_url,
             get_data_directory,
             read_version_file,
+            test_text_injection,
+            test_simple_text_injection,
         },
         history_commands::{
             get_transcription_history,
@@ -75,11 +77,13 @@ fn init_x11_threads() {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logging (default to `error` unless the user overrides `RUST_LOG`)
-    env_logger::Builder::from_env(env_logger::Env::default().filter_or("RUST_LOG", "error"))
+    env_logger::Builder::from_env(env_logger::Env::default().filter_or("RUST_LOG", "info"))
         .format_timestamp(None)
         // Show Groq round-trip INFO while keeping the rest of audio chatter quiet
         .filter_module("vwisper_lib::modules::audio::processor", log::LevelFilter::Info)
         .filter_module("vwisper_lib::modules::audio", log::LevelFilter::Warn)
+        // Show text injection logs at INFO level for debugging
+        .filter_module("vwisper_lib::modules::core::text_injection", log::LevelFilter::Info)
         // Downgrade platform key-monitor logs to WARN and above
         .filter_module("vwisper_lib::platform", log::LevelFilter::Warn)
         .init();
@@ -199,8 +203,31 @@ pub fn run() {
             get_history_stats,
             get_history_entries_by_date,
             reload_transcription_history,
+            test_text_injection,
+            test_simple_text_injection,
         ])
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            info!("Single instance detected: another VWisper instance tried to start");
+            info!("Args: {:?}, CWD: {:?}", argv, cwd);
+            
+            // When a second instance tries to start, bring the existing dashboard to focus
+            match app.get_webview_window("splashscreen") {
+                Some(window) => {
+                    info!("Found splashscreen window, bringing to focus");
+                    let _ = window.set_focus();
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                }
+                None => {
+                    // If no splashscreen, try to open/focus the dashboard
+                    info!("No splashscreen found, trying to show dashboard");
+                    if let Err(e) = crate::modules::ui::commands::show_dashboard_window(app.clone()) {
+                        warn!("Failed to show dashboard window: {}", e);
+                    }
+                }
+            }
+        }))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

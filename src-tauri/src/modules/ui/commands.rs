@@ -786,3 +786,44 @@ pub fn read_version_file() -> Result<String, String> {
         .map(|content| content.trim().to_string())
         .map_err(|e| format!("Failed to read version file: {}", e))
 }
+
+#[tauri::command]
+pub fn test_text_injection(test_text: String) -> Result<String, String> {
+    use crate::modules::core::text_injection::inject_text;
+    
+    info!("Testing text injection with: '{}'", test_text);
+    
+    match inject_text(&test_text) {
+        Ok(_) => {
+            let success_msg = format!("Successfully injected text: '{}'", test_text);
+            info!("{}", success_msg);
+            Ok(success_msg)
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to inject text '{}': {}", test_text, e);
+            error!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+}
+
+#[tauri::command]
+pub fn test_simple_text_injection() -> Result<String, String> {
+    use crate::modules::core::text_injection::inject_text;
+    
+    let test_text = "Hello from VWisper!";
+    info!("Testing simple text injection with: '{}'", test_text);
+    
+    match inject_text(test_text) {
+        Ok(_) => {
+            let success_msg = format!("✅ Text injection test successful: '{}'", test_text);
+            info!("{}", success_msg);
+            Ok(success_msg)
+        }
+        Err(e) => {
+            let error_msg = format!("❌ Text injection test failed: {}", e);
+            error!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+}
