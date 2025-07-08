@@ -613,12 +613,26 @@ const Dashboard: React.FC = () => {
 
             {/* Changelog Dialog */}
             <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
-              <DialogContent className="max-w-2xl overflow-y-auto max-h-[80vh]">
+              <DialogContent className="max-w-4xl w-[90vw] overflow-y-auto max-h-[80vh]">
                 <DialogHeader>
                   <DialogTitle>Changelog</DialogTitle>
                 </DialogHeader>
                 <div className="prose dark:prose-invert max-w-none">
-                  <ReactMarkdown>{changelogContent}</ReactMarkdown>
+                  <ReactMarkdown 
+                    components={{
+                      h1: ({children}) => <h1 className="text-2xl font-bold mb-4 text-foreground">{children}</h1>,
+                      h2: ({children}) => <h2 className="text-xl font-semibold mb-3 mt-6 text-foreground border-b border-border pb-2">{children}</h2>,
+                      h3: ({children}) => <h3 className="text-lg font-medium mb-2 mt-4 text-foreground">{children}</h3>,
+                      p: ({children}) => <p className="mb-3 text-foreground leading-relaxed">{children}</p>,
+                      ul: ({children}) => <ul className="list-disc pl-6 mb-4 space-y-1">{children}</ul>,
+                      li: ({children}) => <li className="text-foreground">{children}</li>,
+                      hr: () => <hr className="my-6 border-border" />,
+                      strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
+                      code: ({children}) => <code className="bg-muted px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
+                    }}
+                  >
+                    {changelogContent}
+                  </ReactMarkdown>
                 </div>
               </DialogContent>
             </Dialog>

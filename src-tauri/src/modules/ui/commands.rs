@@ -703,12 +703,42 @@ pub fn get_data_directory() -> Result<String, String> {
 
 #[tauri::command]
 pub fn read_version_file() -> Result<String, String> {
-    // Read version from embedded asset
-    let version_content = include_str!("../../assets/version.txt");
-    let version = version_content.trim().to_string();
+    use std::fs;
+    use std::path::Path;
     
-    info!("Successfully read version '{}' from embedded assets", version);
-    Ok(version)
+    // Try to read from the assets directory first (for development and if file exists)
+    let assets_path = Path::new("src-tauri/src/assets/version.txt");
+    if assets_path.exists() {
+        match fs::read_to_string(assets_path) {
+            Ok(content) => {
+                let version = content.trim().to_string();
+                info!("Successfully read version '{}' from assets: {}", version, assets_path.display());
+                return Ok(version);
+            }
+            Err(e) => {
+                warn!("Failed to read version from assets {}: {}", assets_path.display(), e);
+            }
+        }
+    }
+    
+    // Fallback to the root version.txt (for development)
+    let root_path = Path::new("version.txt");
+    if root_path.exists() {
+        match fs::read_to_string(root_path) {
+            Ok(content) => {
+                let version = content.trim().to_string();
+                info!("Successfully read version '{}' from root: {}", version, root_path.display());
+                return Ok(version);
+            }
+            Err(e) => {
+                warn!("Failed to read version from root {}: {}", root_path.display(), e);
+            }
+        }
+    }
+    
+    // If neither file exists, return a default version
+    warn!("Could not find version.txt file, using default version");
+    Ok("1.0.0".to_string())
 }
 
 

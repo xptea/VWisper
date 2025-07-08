@@ -64,37 +64,31 @@ const Playground: React.FC<PlaygroundProps> = ({
                   <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
                     <span className="text-xs font-bold text-primary">1</span>
                   </div>
-                  <span>Open any text editor, document, or text field where you want text to appear</span>
+                  <span>Click where you want your text to appear</span>
                 </div>
                 <div className="flex items-start space-x-2">
                   <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
                     <span className="text-xs font-bold text-primary">2</span>
                   </div>
-                  <span>Click in the text area to position your cursor where you want the text</span>
+                  <span>Press and hold the Right Ctrl key</span>
                 </div>
                 <div className="flex items-start space-x-2">
                   <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
                     <span className="text-xs font-bold text-primary">3</span>
                   </div>
-                  <span>Hold down the Right Ctrl key on your keyboard</span>
+                  <span>Simply start talking - just like having a conversation</span>
                 </div>
                 <div className="flex items-start space-x-2">
                   <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
                     <span className="text-xs font-bold text-primary">4</span>
                   </div>
-                  <span>Start speaking clearly into your microphone</span>
+                  <span>Let go of Right Ctrl when you're finished speaking</span>
                 </div>
                 <div className="flex items-start space-x-2">
                   <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
                     <span className="text-xs font-bold text-primary">5</span>
                   </div>
-                  <span>Release Right Ctrl when you're done speaking</span>
-                </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <span className="text-xs font-bold text-primary">6</span>
-                  </div>
-                  <span>Text will be automatically typed at your cursor location</span>
+                  <span>Your words will magically appear as text!</span>
                 </div>
               </div>
             </div>
