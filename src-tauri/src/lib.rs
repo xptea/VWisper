@@ -74,6 +74,32 @@ fn init_x11_threads() {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn ensure_accessibility_permission() {
+    use core_foundation::{boolean::{kCFBooleanTrue, CFBoolean}, dictionary::CFDictionary, string::{CFString, CFStringRef}, base::TCFType};
+    use std::os::raw::c_void;
+
+    unsafe {
+        // Check if we are already trusted; if so, nothing to do.
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+            fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
+            static kAXTrustedCheckOptionPrompt: CFStringRef;
+        }
+
+        if AXIsProcessTrusted() {
+            return;
+        }
+
+        // Build { kAXTrustedCheckOptionPrompt: true } dictionary to trigger prompt.
+        let key = CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt);
+        let value = CFBoolean::wrap_under_get_rule(kCFBooleanTrue);
+        let dict: CFDictionary<CFString, CFBoolean> = CFDictionary::from_CFType_pairs(&[(key.clone(), value.clone())]);
+        // This call will show the system dialog asking the user to grant Accessibility access.
+        let _ = AXIsProcessTrustedWithOptions(dict.as_concrete_TypeRef() as *const c_void);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logging (default to `error` unless the user overrides `RUST_LOG`)
@@ -103,6 +129,10 @@ pub fn run() {
             INIT.call_once(|| {
                 info!("Setting up application");
                 
+                // macOS: ensure Accessibility permission prompt shows once if needed
+                #[cfg(target_os = "macos")]
+                ensure_accessibility_permission();
+
                 // Load configuration and decide which initial window to show
                 let _config = AppConfig::load();
                 
@@ -236,22 +266,6 @@ pub fn run() {
                 }
             }
         }))
-        // On macOS, fully quit the app when the main dashboard window is closed
-        .on_window_event(|window, event| {
-            #[cfg(target_os = "macos")]
-            {
-                use tauri::WindowEvent;
-
-                // Check if the dashboard window is being closed
-                if window.label() == "dashboard" {
-                    if let WindowEvent::CloseRequested { api, .. } = event {
-                        // Prevent the default close behaviour and quit the entire application instead
-                        api.prevent_close();
-                        window.app_handle().exit(0);
-                    }
-                }
-            }
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
