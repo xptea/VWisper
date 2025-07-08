@@ -30,7 +30,6 @@ src-tauri/src/
 ### Prerequisites
 
 - [Rust](https://rustup.rs/)
-- [Bun](https://bun.sh/) (for frontend dependencies)
 - [Tauri CLI](https://tauri.app/v2/guides/getting-started/setup/)
 
 ### Development
@@ -91,17 +90,6 @@ bun run tauri build --target x86_64-pc-windows-msvc
 - Platform-specific code is isolated in the `platform/` directory
 - Global state is managed through the `state.rs` module
 - Tauri commands are defined in `commands.rs`
-
-## Troubleshooting
-
-### Linux Issues
-If you encounter permission issues on Linux, you may need to run the application with elevated privileges for global key monitoring:
-```bash
-sudo bun run tauri dev
-```
-
-### Windows Issues
-On Windows, ensure you're running the latest version and have the necessary Visual Studio build tools installed.
 
 ### macOS Issues
 On macOS, you may need to grant accessibility permissions to the application in System Preferences > Security & Privacy > Privacy > Accessibility.
