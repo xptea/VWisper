@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, LineChart, Line, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { BarChart3, Activity } from 'lucide-react';
 
 interface AnalyticsData {
@@ -57,7 +57,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ analytics, stats }) => {
         {/* Activity Chart */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
+            <CardTitle className="flex items-center space-x-2 text-muted-foreground">
               <BarChart3 className="w-5 h-5" />
               <span>Recording Activity</span>
             </CardTitle>
@@ -183,18 +183,20 @@ const Analytics: React.FC<AnalyticsProps> = ({ analytics, stats }) => {
                   className="h-[150px]"
                 >
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
+                    <AreaChart data={chartData}>
                       <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                       <YAxis hide />
                       <ChartTooltip content={<ChartTooltipContent />} />
-                      <Line
+                      <Area
                         type="monotone"
                         dataKey="duration"
                         stroke="hsl(var(--chart-2))"
+                        fill="hsl(var(--chart-2))"
+                        fillOpacity={0.2}
                         strokeWidth={2}
-                        dot={{ r: 3 }}
+                        connectNulls
                       />
-                    </LineChart>
+                    </AreaChart>
                   </ResponsiveContainer>
                 </ChartContainer>
               ) : (
@@ -218,16 +220,20 @@ const Analytics: React.FC<AnalyticsProps> = ({ analytics, stats }) => {
                   className="h-[150px]"
                 >
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
+                    <AreaChart data={chartData}>
                       <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                       <YAxis hide />
                       <ChartTooltip content={<ChartTooltipContent />} />
-                      <Bar
+                      <Area
+                        type="monotone"
                         dataKey="characters"
+                        stroke="hsl(var(--chart-3))"
                         fill="hsl(var(--chart-3))"
-                        radius={[2, 2, 0, 0]}
+                        fillOpacity={0.2}
+                        strokeWidth={2}
+                        connectNulls
                       />
-                    </BarChart>
+                    </AreaChart>
                   </ResponsiveContainer>
                 </ChartContainer>
               ) : (

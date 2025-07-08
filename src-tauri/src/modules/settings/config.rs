@@ -12,6 +12,8 @@ pub struct AppConfig {
     pub auto_start: bool,
     pub theme: String,
     pub save_history: bool,
+    #[serde(default)]
+    pub has_seen_splash: bool,
 }
 
 impl Default for AppConfig {
@@ -24,6 +26,7 @@ impl Default for AppConfig {
             auto_start: false,
             theme: "system".to_string(),
             save_history: true,
+            has_seen_splash: false,
         }
     }
 }

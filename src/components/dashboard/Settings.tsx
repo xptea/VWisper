@@ -9,7 +9,6 @@ import { Separator } from '@/components/ui/separator';
 import { 
   Eye,
   EyeOff,
-  Save,
   CheckCircle,
   XCircle,
   ExternalLink
@@ -28,10 +27,8 @@ interface AppSettings {
 interface SettingsProps {
   settings: AppSettings | null;
   updateSettings: (key: keyof AppSettings, value: any) => void;
-  saveSettings: () => void;
   testApiKey: () => void;
   openGroqConsole: () => void;
-  saving: boolean;
   testing: boolean;
   apiKeyValid: boolean | null;
   showApiKey: boolean;
@@ -46,10 +43,8 @@ interface SettingsProps {
 const Settings: React.FC<SettingsProps> = ({
   settings,
   updateSettings,
-  saveSettings,
   testApiKey,
   openGroqConsole,
-  saving,
   testing,
   apiKeyValid,
   showApiKey,
@@ -167,17 +162,14 @@ const Settings: React.FC<SettingsProps> = ({
 
             <Separator />
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between opacity-50 pointer-events-none">
               <div className="space-y-0.5">
                 <Label>Auto Start with System</Label>
                 <p className="text-sm text-muted-foreground">
                   Start VWisper automatically when your computer boots
                 </p>
               </div>
-              <Switch
-                checked={settings?.auto_start || false}
-                onCheckedChange={(checked) => updateSettings('auto_start', checked)}
-              />
+              <Switch checked={false} disabled={true} className="pointer-events-none" />
             </div>
 
             <Separator />
@@ -302,19 +294,6 @@ const Settings: React.FC<SettingsProps> = ({
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Save Settings Button - Outside the cards */}
-      <div className="flex justify-center pt-6">
-        <Button
-          onClick={saveSettings}
-          disabled={saving}
-          className="w-full max-w-md"
-          size="lg"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          {saving ? 'Saving Settings...' : 'Save All Settings'}
-        </Button>
       </div>
     </div>
   );

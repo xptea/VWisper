@@ -13,21 +13,6 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "label": "splashscreen",
-        "title": "VWisper",
-        "width": 1000,
-        "height": 1000,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "resizable": false,
-        "visible": true,
-        "center": true,
-        "url": "src/splashscreen.html",
-        "shadow": false
-      },
-      {
         "label": "dashboard",
         "title": "VWisper Dashboard",
         "width": 1235,

@@ -1,12 +1,12 @@
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, Runtime,
+    Manager,
 };
 use log::{info, error};
 use crate::modules::ui::commands::show_dashboard_window;
 
-pub fn create_system_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn create_system_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     info!("Creating system tray...");
     
     // Create menu items
@@ -54,13 +54,15 @@ pub fn create_system_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), B
             match event.id().as_ref() {
                 "dashboard" => {
                     info!("Dashboard menu clicked");
-                    // Try to show existing dashboard window or trigger the command
+                    // Try to show existing dashboard window; if absent, create a fresh one
                     if let Some(window) = app.get_webview_window("dashboard") {
                         let _ = window.show();
                         let _ = window.set_focus();
                     } else {
-                        // If dashboard doesn't exist, we could try to create it via command
-                        info!("Dashboard window not found, would need to create new one");
+                        info!("Dashboard window not found, creating a new one via command");
+                        if let Err(e) = show_dashboard_window(app.clone()) {
+                            error!("Failed to open dashboard from tray: {}", e);
+                        }
                     }
                 }
                 "quit" => {

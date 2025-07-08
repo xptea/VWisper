@@ -1,12 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { invoke } from '@tauri-apps/api/core';
 
 interface PlaygroundProps {
   isRecording: boolean;
@@ -21,23 +18,6 @@ const Playground: React.FC<PlaygroundProps> = ({
   setLiveTranscriptionText,
   settings
 }) => {
-  const [testText, setTestText] = useState('Hello, this is a test!');
-  const [testResult, setTestResult] = useState<string>('');
-  const [isTesting, setIsTesting] = useState(false);
-
-  const handleTestTextInjection = async () => {
-    setIsTesting(true);
-    setTestResult('');
-    
-    try {
-      const result = await invoke('test_text_injection', { testText });
-      setTestResult(`✅ ${result}`);
-    } catch (error) {
-      setTestResult(`❌ ${error}`);
-    } finally {
-      setIsTesting(false);
-    }
-  };
   return (
     <Card>
       <CardHeader>
@@ -126,7 +106,6 @@ const Playground: React.FC<PlaygroundProps> = ({
               <div className="space-y-1 text-sm text-muted-foreground">
                 <p>• Speak clearly and at a moderate pace</p>
                 <p>• Minimize background noise</p>
-                <p>• Use proper punctuation words like "comma", "period"</p>
                 <p>• Keep recordings under 30 seconds for best accuracy</p>
                 <p>• Ensure your microphone is working properly</p>
               </div>
@@ -139,38 +118,6 @@ const Playground: React.FC<PlaygroundProps> = ({
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>Sample Rate: {settings?.sample_rate || 16000} Hz</p>
                 <p>Volume Threshold: {settings?.volume_threshold || 0.005}</p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Text Injection Debugging</h4>
-              <div className="space-y-2">
-                <div className="flex space-x-2">
-                  <Input
-                    value={testText}
-                    onChange={(e) => setTestText(e.target.value)}
-                    placeholder="Enter test text..."
-                    className="flex-1"
-                  />
-                  <Button 
-                    onClick={handleTestTextInjection}
-                    disabled={isTesting}
-                    variant="outline"
-                    size="sm"
-                  >
-                    {isTesting ? 'Testing...' : 'Test Inject'}
-                  </Button>
-                </div>
-                {testResult && (
-                  <div className="text-xs p-2 bg-muted rounded">
-                    {testResult}
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Click into any text field (like the one above) and then click "Test Inject" to debug text injection on Windows.
-                </p>
               </div>
             </div>
           </div>

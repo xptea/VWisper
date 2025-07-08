@@ -566,26 +566,29 @@ pub fn debug_windows(app: tauri::AppHandle) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub fn transform_splash_to_dashboard(app: tauri::AppHandle) -> Result<(), String> {
-    info!("=== Transforming splashscreen to dashboard ===");
-    
+    info!("=== Transforming splashscreen to separate dashboard window ===");
+
+    // 1. Close splash window (if any) and show/create dashboard
     if let Some(window) = app.get_webview_window("splashscreen") {
-        info!("Found splashscreen window, transforming it");
-        
-        // Update window properties for dashboard
-        let _ = window.set_title("VWisper Dashboard");
-        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 1235, height: 1140 }));
-        let _ = window.set_resizable(true);
-        let _ = window.set_decorations(true);
-        let _ = window.set_always_on_top(false);
-        let _ = window.set_skip_taskbar(false);
-        let _ = window.center();
-        
-        info!("Window properties updated for dashboard");
-        Ok(())
-    } else {
-        error!("No splashscreen window found to transform");
-        Err("No splashscreen window found".to_string())
+        info!("Closing splashscreen window after dashboard is ready");
+        let _ = window.close();
     }
+
+    if let Err(e) = show_dashboard_window(app.clone()) {
+        error!("Failed to create/show dashboard window: {}", e);
+        return Err(e);
+    }
+
+    // 3. Persist that the splash was shown so we skip it next launch
+    {
+        let mut cfg = crate::modules::settings::AppConfig::load();
+        if !cfg.has_seen_splash {
+            cfg.has_seen_splash = true;
+            let _ = cfg.save();
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -655,52 +658,6 @@ pub fn get_formatted_usage_stats() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub fn resize_dashboard_for_tab(app: tauri::AppHandle, tab: String) -> Result<(), String> {
-    info!("Resizing dashboard window for tab: {}", tab);
-    
-    if let Some(window) = app.get_webview_window("dashboard") {
-        let (width, height) = match tab.as_str() {
-            "analytics" => (1235, 820),
-            "playground" => (1235, 1140),
-            "settings" => (1235, 1200),
-            _ => {
-                warn!("Unknown tab: {}, using default playground size", tab);
-                (1235, 1140)
-            }
-        };
-        
-        info!("Setting window size to {}x{} for tab: {}", width, height, tab);
-        
-        // Add a small delay to ensure the window is ready
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        
-        // Ensure window is focused and visible before resizing
-        if let Err(e) = window.set_focus() {
-            warn!("Failed to focus window before resize: {}", e);
-        }
-        
-        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { 
-            width: width as u32, 
-            height: height as u32 
-        })) {
-            error!("Failed to resize window: {}", e);
-            return Err(e.to_string());
-        }
-        
-        // Re-center the window after resizing
-        if let Err(e) = window.center() {
-            error!("Failed to center window: {}", e);
-        }
-        
-        info!("Successfully resized window to {}x{} for tab: {}", width, height, tab);
-        Ok(())
-    } else {
-        error!("Dashboard window not found");
-        Err("Dashboard window not found".to_string())
-    }
-}
-
-#[tauri::command]
 pub fn open_url(url: String) -> Result<(), String> {
     use std::process::Command;
     
@@ -746,46 +703,15 @@ pub fn get_data_directory() -> Result<String, String> {
 
 #[tauri::command]
 pub fn read_version_file() -> Result<String, String> {
-    use std::path::PathBuf;
-    use std::fs;
+    // Read version from embedded asset
+    let version_content = include_str!("../../assets/version.txt");
+    let version = version_content.trim().to_string();
     
-    // Get the current executable directory
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Failed to get executable path: {}", e))?;
-    
-    let exe_dir = exe_path.parent()
-        .ok_or("Failed to get executable directory")?;
-    
-    let version_file = exe_dir.join("version.txt");
-    
-    // If version.txt doesn't exist in exe dir, try the app resources
-    let version_path = if version_file.exists() {
-        version_file
-    } else {
-        // For development, try to find version.txt in the project root
-        let mut project_root = exe_dir.to_path_buf();
-        
-        // Go up directories until we find version.txt or reach the root
-        for _ in 0..5 {
-            project_root = project_root.parent()
-                .ok_or("Could not find project root")?
-                .to_path_buf();
-            
-            let version_candidate = project_root.join("version.txt");
-            if version_candidate.exists() {
-                break;
-            }
-        }
-        
-        project_root.join("version.txt")
-    };
-    
-    info!("Reading version from: {}", version_path.display());
-    
-    fs::read_to_string(&version_path)
-        .map(|content| content.trim().to_string())
-        .map_err(|e| format!("Failed to read version file: {}", e))
+    info!("Successfully read version '{}' from embedded assets", version);
+    Ok(version)
 }
+
+
 
 #[tauri::command]
 pub fn test_text_injection(test_text: String) -> Result<String, String> {
@@ -826,4 +752,111 @@ pub fn test_simple_text_injection() -> Result<String, String> {
             Err(error_msg)
         }
     }
+}
+
+#[derive(serde::Serialize)]
+pub struct UpdateCheckResult {
+    pub local_version: String,
+    pub remote_version: String,
+    pub has_update: bool,
+    pub success: bool,
+    pub error_message: Option<String>,
+}
+
+#[tauri::command]
+pub fn check_for_updates() -> Result<UpdateCheckResult, String> {
+    info!("Checking for updates...");
+    
+    // Get local version
+    let local_version = match read_version_file() {
+        Ok(version) => version,
+        Err(e) => {
+            let error_msg = format!("Failed to read local version: {}", e);
+            error!("{}", error_msg);
+            return Ok(UpdateCheckResult {
+                local_version: "unknown".to_string(),
+                remote_version: "unknown".to_string(),
+                has_update: false,
+                success: false,
+                error_message: Some(error_msg),
+            });
+        }
+    };
+    
+    // Fetch remote version from GitHub
+    let remote_version = match fetch_remote_version() {
+        Ok(version) => version,
+        Err(e) => {
+            let error_msg = format!("Failed to fetch remote version: {}", e);
+            error!("{}", error_msg);
+            return Ok(UpdateCheckResult {
+                local_version,
+                remote_version: "unknown".to_string(),
+                has_update: false,
+                success: false,
+                error_message: Some(error_msg),
+            });
+        }
+    };
+    
+    // Compare versions
+    let has_update = compare_versions(&remote_version, &local_version) > 0;
+    
+    info!("Update check completed - Local: {}, Remote: {}, Has update: {}", 
+          local_version, remote_version, has_update);
+    
+    Ok(UpdateCheckResult {
+        local_version,
+        remote_version,
+        has_update,
+        success: true,
+        error_message: None,
+    })
+}
+
+fn fetch_remote_version() -> Result<String, String> {
+    use reqwest::blocking::Client;
+    use std::time::Duration;
+    
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    
+    let url = "https://raw.githubusercontent.com/xptea/VWisper/refs/heads/main/src-tauri/src/assets/version.txt";
+    
+    let response = client
+        .get(url)
+        .send()
+        .map_err(|e| format!("Failed to fetch remote version: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("HTTP error: {}", response.status()));
+    }
+    
+    let content = response
+        .text()
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+    
+    Ok(content.trim().to_string())
+}
+
+fn compare_versions(version1: &str, version2: &str) -> i32 {
+    let v1_parts: Vec<u32> = version1.split('.').filter_map(|s| s.parse().ok()).collect();
+    let v2_parts: Vec<u32> = version2.split('.').filter_map(|s| s.parse().ok()).collect();
+    
+    let max_len = v1_parts.len().max(v2_parts.len());
+    
+    for i in 0..max_len {
+        let v1_part = v1_parts.get(i).copied().unwrap_or(0);
+        let v2_part = v2_parts.get(i).copied().unwrap_or(0);
+        
+        if v1_part > v2_part {
+            return 1;
+        } else if v1_part < v2_part {
+            return -1;
+        }
+    }
+    
+    0
 }

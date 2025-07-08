@@ -45,12 +45,12 @@ use modules::{
             get_analytics_data,
             record_transcription_session,
             get_formatted_usage_stats,
-            resize_dashboard_for_tab,
             open_url,
             get_data_directory,
             read_version_file,
             test_text_injection,
             test_simple_text_injection,
+            check_for_updates,
         },
         history_commands::{
             get_transcription_history,
@@ -103,8 +103,16 @@ pub fn run() {
             INIT.call_once(|| {
                 info!("Setting up application");
                 
-                // Load configuration
+                // Load configuration and decide which initial window to show
                 let _config = AppConfig::load();
+                
+                // Always open (or create) the dashboard window on launch
+                if let Some(dashboard) = app.get_webview_window("dashboard") {
+                    let _ = dashboard.show();
+                    let _ = dashboard.set_focus();
+                } else if let Err(e) = crate::modules::ui::commands::show_dashboard_window(app.handle().clone()) {
+                    error!("Failed to open dashboard window: {}", e);
+                }
                 
                 // Initialize audio recorder
                 if let Err(e) = init_audio_recorder(None) {
@@ -192,7 +200,6 @@ pub fn run() {
             get_analytics_data,
             record_transcription_session,
             get_formatted_usage_stats,
-            resize_dashboard_for_tab,
             open_url,
             get_data_directory,
             read_version_file,
@@ -205,6 +212,7 @@ pub fn run() {
             reload_transcription_history,
             test_text_injection,
             test_simple_text_injection,
+            check_for_updates,
         ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {

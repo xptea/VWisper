@@ -11,8 +11,11 @@ import {
   Github,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  BookOpen
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import ReactMarkdown from 'react-markdown';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -69,7 +72,6 @@ const Dashboard: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -80,11 +82,15 @@ const Dashboard: React.FC = () => {
   const [liveTranscriptionText, setLiveTranscriptionText] = useState<string>('');
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<{ type: 'success' | 'error' | 'update'; message: string } | null>(null);
+  const [changelogOpen, setChangelogOpen] = useState(false);
+  const [changelogContent, setChangelogContent] = useState<string>('');
 
   useEffect(() => {
     loadDashboardData();
     // Apply system theme on load
     applyTheme('system');
+    // Check for updates automatically
+    checkForUpdates();
   }, []);
 
   const loadDashboardData = async () => {
@@ -204,27 +210,30 @@ const Dashboard: React.FC = () => {
     setUpdateStatus(null);
     
     try {
-      // Read local version
-      const localVersion = await invoke<string>("read_version_file");
+      const result = await invoke<{
+        local_version: string;
+        remote_version: string;
+        has_update: boolean;
+        success: boolean;
+        error_message?: string;
+      }>("check_for_updates");
       
-      // Fetch remote version from GitHub
-      const response = await fetch('https://raw.githubusercontent.com/xptea/VWisper/refs/heads/main/version.txt');
-      if (!response.ok) {
-        throw new Error('Failed to fetch remote version');
-      }
-      
-      const remoteVersion = (await response.text()).trim();
-      
-      // Compare versions
-      if (compareVersions(remoteVersion, localVersion) > 0) {
-        setUpdateStatus({
-          type: 'update',
-          message: `A new version (v${remoteVersion}) is available! You are currently running v${localVersion}.`
-        });
+      if (result.success) {
+        if (result.has_update) {
+          setUpdateStatus({
+            type: 'update',
+            message: `A new version (v${result.remote_version}) is available! You are currently running v${result.local_version}.`
+          });
+        } else {
+          setUpdateStatus({
+            type: 'success',
+            message: `You are running the latest version (v${result.local_version}).`
+          });
+        }
       } else {
         setUpdateStatus({
-          type: 'success',
-          message: `You are running the latest version (v${localVersion}).`
+          type: 'error',
+          message: result.error_message || 'Failed to check for updates. Please check your internet connection.'
         });
       }
     } catch (error) {
@@ -246,21 +255,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Simple version comparison function
-  const compareVersions = (version1: string, version2: string): number => {
-    const v1Parts = version1.split('.').map(Number);
-    const v2Parts = version2.split('.').map(Number);
-    
-    for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
-      const v1Part = v1Parts[i] || 0;
-      const v2Part = v2Parts[i] || 0;
-      
-      if (v1Part > v2Part) return 1;
-      if (v1Part < v2Part) return -1;
-    }
-    
-    return 0;
-  };
+
 
   const formatDuration = (ms: number): string => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -295,19 +290,11 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const saveSettings = async () => {
-    if (!settings) return;
-
-    setSaving(true);
+  const saveSettings = async (newSettings: AppSettings) => {
     try {
-      await invoke("save_settings", { settings });
-      setMessage({ type: 'success', text: 'Settings saved successfully!' });
-      setTimeout(() => setMessage(null), 3000);
+      await invoke("save_settings", { settings: newSettings });
     } catch (error) {
       console.error("Failed to save settings:", error);
-      setMessage({ type: 'error', text: 'Failed to save settings' });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -325,10 +312,9 @@ const Dashboard: React.FC = () => {
         apiKey: settings.groq_api_key
       });
       setApiKeyValid(isValid);
-      setMessage({
-        type: isValid ? 'success' : 'error',
-        text: isValid ? 'API key is valid!' : 'API key is invalid'
-      });
+      if (!isValid) {
+        setMessage({ type: 'error', text: 'API key is invalid' });
+      }
     } catch (error) {
       console.error("Failed to test API key:", error);
       setApiKeyValid(false);
@@ -340,21 +326,28 @@ const Dashboard: React.FC = () => {
 
   const updateSettings = (key: keyof AppSettings, value: any) => {
     if (!settings) return;
-    setSettings(prev => prev ? { ...prev, [key]: value } : null);
+    const updated = { ...settings, [key]: value } as AppSettings;
+    setSettings(updated);
     if (key === 'groq_api_key') {
       setApiKeyValid(null);
     }
+    // Persist immediately
+    saveSettings(updated);
   };
 
   const handleTabChange = async (newTab: string) => {
-    console.log('Tab changing to:', newTab);
     setActiveTab(newTab);
+  };
+
+  const openChangelog = async () => {
     try {
-      console.log('Calling resize_dashboard_for_tab with tab:', newTab);
-      await invoke('resize_dashboard_for_tab', { tab: newTab });
-      console.log('Successfully resized window for tab:', newTab);
-    } catch (error) {
-      console.error('Failed to resize window for tab:', newTab, error);
+      const resp = await fetch('/CHANGELOG.md');
+      const txt = await resp.text();
+      setChangelogContent(txt);
+    } catch {
+      setChangelogContent('Failed to load changelog.');
+    } finally {
+      setChangelogOpen(true);
     }
   };
 
@@ -463,8 +456,46 @@ const Dashboard: React.FC = () => {
                    theme === 'dark' ? <Moon className="w-4 h-4" /> : 
                    <Monitor className="w-4 h-4" />}
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={openChangelog}
+                  className="h-8 w-8 p-0"
+                  title="View Changelog"
+                >
+                  <BookOpen className="w-4 h-4" />
+                </Button>
               </div>
             </div>
+
+            {/* Update Banner */}
+            {updateStatus && updateStatus.type === 'update' && (
+              <Alert className="mt-4 border-blue-500 bg-blue-50 dark:bg-blue-950">
+                {/* Ensure content spans the correct grid column so text isn't squashed */}
+                <div className="flex items-center justify-between w-full col-start-2">
+                  <AlertDescription className="text-blue-700 dark:text-blue-400">
+                    {updateStatus.message}
+                  </AlertDescription>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openGitHubReleases}
+                    className="h-7 px-2 text-xs"
+                  >
+                    Download Update
+                  </Button>
+                </div>
+              </Alert>
+            )}
+
+            {/* Error Message Banner */}
+            {message && message.type === 'error' && (
+              <Alert className="mt-4 border-red-500 bg-red-50 dark:bg-red-950"> 
+                <AlertDescription className="text-red-700 dark:text-red-400">
+                  {message.text}
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -562,21 +593,11 @@ const Dashboard: React.FC = () => {
               </TabsContent>
 
               <TabsContent value="settings" className="space-y-4">
-                {message && (
-                  <Alert className={message.type === 'success' ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-red-500 bg-red-50 dark:bg-red-950'}>
-                    <AlertDescription className={message.type === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}>
-                      {message.text}
-                    </AlertDescription>
-                  </Alert>
-                )}
-
                 <Settings
                   settings={settings}
                   updateSettings={updateSettings}
-                  saveSettings={saveSettings}
                   testApiKey={testApiKey}
                   openGroqConsole={openGroqConsole}
-                  saving={saving}
                   testing={testing}
                   apiKeyValid={apiKeyValid}
                   showApiKey={showApiKey}
@@ -589,6 +610,18 @@ const Dashboard: React.FC = () => {
                 />
               </TabsContent>
             </Tabs>
+
+            {/* Changelog Dialog */}
+            <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
+              <DialogContent className="max-w-2xl overflow-y-auto max-h-[80vh]">
+                <DialogHeader>
+                  <DialogTitle>Changelog</DialogTitle>
+                </DialogHeader>
+                <div className="prose dark:prose-invert max-w-none">
+                  <ReactMarkdown>{changelogContent}</ReactMarkdown>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>

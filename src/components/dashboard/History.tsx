@@ -55,7 +55,7 @@ const History: React.FC<HistoryProps> = ({ settings, setMessage }) => {
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [sortType, setSortType] = useState<SortType>('newest');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage] = useState(25);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -131,6 +131,8 @@ const History: React.FC<HistoryProps> = ({ settings, setMessage }) => {
   };
 
   const clearAllHistory = async () => {
+    const confirm = window.confirm(`Delete ALL ${historyEntries.length} history entries? This cannot be undone.`);
+    if (!confirm) return;
     try {
       await invoke("clear_transcription_history");
       await loadHistoryData();
@@ -295,19 +297,6 @@ const History: React.FC<HistoryProps> = ({ settings, setMessage }) => {
                   <SelectContent>
                     <SelectItem value="newest">Newest First</SelectItem>
                     <SelectItem value="oldest">Oldest First</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Items per Page */}
-                <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Items per page" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="25">25 per page</SelectItem>
-                    <SelectItem value="50">50 per page</SelectItem>
-                    <SelectItem value="100">100 per page</SelectItem>
-                    <SelectItem value="250">250 per page</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

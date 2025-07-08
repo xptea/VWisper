@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
@@ -18,7 +17,8 @@ export default defineConfig(async () => ({
     rollupOptions: {
       input: {
         main: "index.html",
-        "wave-window": "src/wave-window.html"
+        "wave-window": "src/wave-window.html",
+        dashboard: "src/dashboard.html"
       }
     }
   },
