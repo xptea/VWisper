@@ -236,6 +236,22 @@ pub fn run() {
                 }
             }
         }))
+        // On macOS, fully quit the app when the main dashboard window is closed
+        .on_window_event(|window, event| {
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::WindowEvent;
+
+                // Check if the dashboard window is being closed
+                if window.label() == "dashboard" {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        // Prevent the default close behaviour and quit the entire application instead
+                        api.prevent_close();
+                        window.app_handle().exit(0);
+                    }
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

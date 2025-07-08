@@ -55,13 +55,10 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
         let mut last_action_time = std::time::Instant::now();
         let mut consecutive_errors = 0;
         let mut last_window_show_time = std::time::Instant::now();
-        
-        log::info!("Linux key monitoring started using device_query");
-        log::info!("Hold RIGHT CTRL to record, release to process and see results");
-        
+
         loop {
             let keys: Vec<Keycode> = device_state.get_keys();
-            let control_pressed = keys.contains(&Keycode::RControl); // Only RIGHT CTRL
+            let control_pressed = keys.contains(&Keycode::RControl); 
             
             // Check for key press (show window and start recording)
             if control_pressed && !last_control_state {
@@ -73,7 +70,6 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
                     if now.duration_since(last_window_show_time) > Duration::from_millis(1000) {
                         last_window_show_time = now;
                         
-                        log::info!("RIGHT CTRL pressed - attempting to show window and start recording");
                         
                         // Limit consecutive errors to prevent spam
                         if consecutive_errors < 3 {

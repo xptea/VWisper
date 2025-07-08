@@ -5,16 +5,26 @@ All notable changes to VWisper will be documented in this file.
 ## [v1.0.1] - 7/8/2025
 **[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.1)**
 
-### Added
+### macOS
+- Added: Application now fully quits when the Dashboard window is closed (temporary workaround while system-tray support is disabled).
+
+### Windows
+- No Windows-specific updates in this release.
+
+### Linux
+- No Linux-specific updates in this release.
+
+### All Platforms
+#### Added
 - Update banner notification system
 - Automatic update check functionality
 - Improved dashboard window management
 
-### Fixed
+#### Fixed
 - Issue with opening multiple dashboard windows
 - Window focus and positioning improvements
 
-### Changed
+#### Changed
 - Enhanced error handling for window operations
 
 ---
@@ -31,7 +41,7 @@ All notable changes to VWisper will be documented in this file.
 - History of transcription sessions
 - Text playground for testing
 - Groq API integration
-- Global hotkey support (Right Ctrl)
+- Global hotkey support (Right Ctrl for windows & linux or Left control on mac)
 - System tray integration
 - Cross-platform support (Windows, macOS, Linux)
 

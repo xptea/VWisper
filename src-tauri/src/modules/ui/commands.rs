@@ -738,7 +738,7 @@ pub fn read_version_file() -> Result<String, String> {
     
     // If neither file exists, return a default version
     warn!("Could not find version.txt file, using default version");
-    Ok("1.0.0".to_string())
+    Ok("1.0.1".to_string())
 }
 
 

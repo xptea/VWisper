@@ -23,7 +23,7 @@ const Playground: React.FC<PlaygroundProps> = ({
       <CardHeader>
         <CardTitle>Text Playground</CardTitle>
         <CardDescription>
-          Test and practice with VWisper transcription. Try speaking while holding Right Ctrl.
+          Test and practice with VWisper transcription. Try speaking while holding Right Ctrl on windows & linux or Left control on mac.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -35,7 +35,7 @@ const Playground: React.FC<PlaygroundProps> = ({
               <textarea
                 id="liveText"
                 className="mt-2 w-full min-h-[200px] p-4 bg-muted/50 border border-border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-                placeholder={isRecording ? "🎤 Listening... Release Right Ctrl when done." : "Click here and hold Right Ctrl to start transcribing. Your speech will appear as text in real-time."}
+                placeholder={isRecording ? "🎤 Listening... Release Right Ctrl on windows & linux or Left control on mac when done." : "Click here and hold Right Ctrl on windows & linux or Left control on mac to start transcribing. Your speech will appear as text in real-time."}
                 readOnly={false}
                 value={liveTranscriptionText}
                 onChange={(e) => setLiveTranscriptionText(e.target.value)}
@@ -82,7 +82,7 @@ const Playground: React.FC<PlaygroundProps> = ({
                   <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
                     <span className="text-xs font-bold text-primary">4</span>
                   </div>
-                  <span>Let go of Right Ctrl when you're finished speaking</span>
+                  <span>Let go of Right Ctrl or Left control for macwhen you're finished speaking</span>
                 </div>
                 <div className="flex items-start space-x-2">
                   <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">

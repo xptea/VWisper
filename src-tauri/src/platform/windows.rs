@@ -9,12 +9,9 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
         let mut last_control_state = false;
         let mut last_action_time = std::time::Instant::now();
         
-        log::info!("Windows key monitoring started using device_query");
-        log::info!("Hold RIGHT CTRL to record, release to process and see results");
-        
         loop {
             let keys: Vec<Keycode> = device_state.get_keys();
-            let control_pressed = keys.contains(&Keycode::RControl); // Only RIGHT CTRL
+            let control_pressed = keys.contains(&Keycode::RControl); 
             
             // Check for key press (show window and start recording)
             if control_pressed && !last_control_state {
