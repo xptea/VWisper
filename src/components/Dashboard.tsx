@@ -209,7 +209,7 @@ const Dashboard: React.FC = () => {
       const localVersion = await invoke<string>("read_version_file");
       
       // Fetch remote version from GitHub
-      const response = await fetch('https://raw.githubusercontent.com/xptea/VWisper/main/version.txt');
+      const response = await fetch('https://raw.githubusercontent.com/xptea/VWisper/refs/heads/main/version.txt');
       if (!response.ok) {
         throw new Error('Failed to fetch remote version');
       }
