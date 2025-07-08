@@ -195,32 +195,40 @@ impl AudioProcessor {
                             error!("Failed to emit transcription-completed event: {}", e);
                         }
                         
-                        // Reset window size and hide after successful processing
-                        if let Some(window) = app_handle.get_webview_window("wave-window") {
-                            // Tell the front-end to collapse the pill back to its compact state
-                            let _ = window.emit("wave-reset", ());
-
-                            // Resize to compact, wait for front-end collapse, then hide
-                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
-                                error!("Failed to reset window size: {}", e);
-                            }
-                            std::thread::sleep(std::time::Duration::from_millis(400));
-                            if let Err(e) = window.hide() {
-                                error!("Failed to hide window: {}", e);
-                            }
-                        }
-                        
-                        // Reset window counter
-                        crate::modules::ui::commands::reset_wave_window_counter_internal();
-                        
+                        // Inject text and play sound immediately after successful transcription
                         if let Err(e) = inject_text(&text) {
                             error!("Failed to inject text: {}", e);
-                            // Play error sound if text injection fails
-                            crate::modules::audio::sound::play_error_sound();
+                            // Emit event for frontend to play error sound
+                            if let Err(e) = app_handle.emit("play-sound", "error") {
+                                error!("Failed to emit play-sound event for error: {}", e);
+                            }
                         } else {
-                            // Play ending sound after successful text injection
-                            crate::modules::audio::sound::play_ending_sound();
+                            // Emit event for frontend to play ending sound
+                            if let Err(e) = app_handle.emit("play-sound", "ending") {
+                                error!("Failed to emit play-sound event for ending: {}", e);
+                            }
                         }
+                        
+                        // Reset window size and hide after successful processing (concurrent with sound)
+                        let window_handle = app_handle.clone();
+                        std::thread::spawn(move || {
+                            if let Some(window) = window_handle.get_webview_window("wave-window") {
+                                // Tell the front-end to collapse the pill back to its compact state
+                                let _ = window.emit("wave-reset", ());
+
+                                // Resize to compact, wait for front-end collapse, then hide
+                                if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
+                                    error!("Failed to reset window size: {}", e);
+                                }
+                                std::thread::sleep(std::time::Duration::from_millis(400));
+                                if let Err(e) = window.hide() {
+                                    error!("Failed to hide window: {}", e);
+                                }
+                            }
+                            
+                            // Reset window counter
+                            crate::modules::ui::commands::reset_wave_window_counter_internal();
+                        });
                     }
                     Ok(_) => {
                         let processing_duration = processing_start.elapsed().as_millis() as u64;
@@ -259,8 +267,10 @@ impl AudioProcessor {
                         // Record failed session
                         record_session(audio_duration_ms, processing_duration, "", false, Some(e.to_string()));
                         
-                        // Play error sound for transcription failure
-                        crate::modules::audio::sound::play_error_sound();
+                        // Emit event for frontend to play error sound
+                        if let Err(e) = app_handle.emit("play-sound", "error") {
+                            error!("Failed to emit play-sound event for error: {}", e);
+                        }
                         
                         // Emit transcription error event
                         if let Err(e) = app_handle.emit("transcription-error", e.to_string()) {
@@ -404,6 +414,7 @@ fn record_session(
         duration_ms: processing_duration_ms,
         audio_length_ms: audio_duration_ms,
         transcription_length: transcription.len(),
+        transcribed_text: transcription.to_string(),
         processing_time_ms: processing_duration_ms,
         success,
         error_message,

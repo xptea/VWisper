@@ -72,6 +72,12 @@ function App() {
         setIconsExiting(false); 
         setUiState(UIState.Recording);
       });
+
+      // Listen for sound events from backend
+      await listen("play-sound", (event) => {
+        const soundName = event.payload as string;
+        playSound(soundName);
+      });
     };
 
     setupListeners();
@@ -134,6 +140,30 @@ function App() {
       return () => clearTimeout(t);
     }
   }, [uiState]);
+
+  /* ------------------------------------------------------------------
+   * Sound Functions
+   * ------------------------------------------------------------------ */
+  const playSound = (soundName: string) => {
+    try {
+      // Use public folder path for Vite
+      const soundPath = `/sounds/${soundName}.wav`;
+      
+      const audio = new Audio(soundPath);
+      audio.volume = 0.6;
+      
+      audio.onerror = (error) => {
+        console.error(`Failed to load ${soundName} sound:`, error);
+      };
+      
+      audio.play().catch((error) => {
+        console.error(`Failed to play ${soundName} sound:`, error);
+      });
+      
+    } catch (error) {
+      console.error(`Error with ${soundName} sound:`, error);
+    }
+  };
 
   /* ------------------------------------------------------------------
    * Render helpers

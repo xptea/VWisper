@@ -11,6 +11,7 @@ pub struct RecordingSession {
     pub duration_ms: u64,
     pub audio_length_ms: u64,
     pub transcription_length: usize,
+    pub transcribed_text: String,
     pub processing_time_ms: u64,
     pub success: bool,
     pub error_message: Option<String>,
@@ -88,6 +89,14 @@ impl UsageStats {
     pub fn get_average_duration(&self) -> u64 {
         if self.total_recordings > 0 {
             self.total_duration_ms / self.total_recordings
+        } else {
+            0
+        }
+    }
+
+    pub fn get_average_processing_time(&self) -> u64 {
+        if self.total_recordings > 0 {
+            self.total_processing_time_ms / self.total_recordings
         } else {
             0
         }

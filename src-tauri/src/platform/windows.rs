@@ -19,7 +19,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             // Check for key press (show window and start recording)
             if control_pressed && !last_control_state {
                 let now = std::time::Instant::now();
-                if now.duration_since(last_action_time) > Duration::from_millis(100) {
+                if now.duration_since(last_action_time) > Duration::from_millis(25) { // Reduced from 50ms to 25ms
                     last_action_time = now;
                     
                     // Show window and start recording
@@ -30,7 +30,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             // Check for key release (stop recording but keep window for processing)
             if !control_pressed && last_control_state {
                 let now = std::time::Instant::now();
-                if now.duration_since(last_action_time) > Duration::from_millis(100) {
+                if now.duration_since(last_action_time) > Duration::from_millis(25) { // Reduced from 50ms to 25ms
                     last_action_time = now;
                     
                     // Stop recording but keep window visible for processing
@@ -39,7 +39,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             }
             
             last_control_state = control_pressed;
-            thread::sleep(Duration::from_millis(50));
+            thread::sleep(Duration::from_millis(10)); // Reduced from 50ms to 10ms for better responsiveness
         }
     });
-} 
+}

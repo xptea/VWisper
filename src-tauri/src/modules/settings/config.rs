@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub groq_api_key: Option<String>,
     pub shortcut_enabled: bool,
     pub auto_start: bool,
+    pub theme: String,
+    pub save_history: bool,
 }
 
 impl Default for AppConfig {
@@ -18,10 +20,12 @@ impl Default for AppConfig {
         Self {
             sample_rate: 16000,
             volume_threshold: 0.005,
-            processing_duration_ms: 4000,
+            processing_duration_ms: 0,
             groq_api_key: None,
             shortcut_enabled: true,
             auto_start: false,
+            theme: "system".to_string(),
+            save_history: true,
         }
     }
 }

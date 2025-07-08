@@ -4,18 +4,19 @@ use tauri::{
     Manager, Runtime,
 };
 use log::{info, error};
+use crate::modules::ui::commands::show_dashboard_window;
 
 pub fn create_system_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
     info!("Creating system tray...");
     
     // Create menu items
-    let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+    let dashboard_item = MenuItem::with_id(app, "dashboard", "Dashboard", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     
     // Create the menu
     let menu = Menu::with_items(app, &[
-        &settings_item,
+        &dashboard_item,
         &separator,
         &quit_item,
     ])?;
@@ -51,10 +52,15 @@ pub fn create_system_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), B
         .on_menu_event(|app, event| {
             info!("Menu event triggered: {}", event.id().as_ref());
             match event.id().as_ref() {
-                "settings" => {
-                    info!("Settings menu clicked");
-                    if let Err(e) = show_settings_window(app) {
-                        error!("Failed to show settings window: {}", e);
+                "dashboard" => {
+                    info!("Dashboard menu clicked");
+                    // Try to show existing dashboard window or trigger the command
+                    if let Some(window) = app.get_webview_window("dashboard") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    } else {
+                        // If dashboard doesn't exist, we could try to create it via command
+                        info!("Dashboard window not found, would need to create new one");
                     }
                 }
                 "quit" => {
@@ -71,37 +77,3 @@ pub fn create_system_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), B
     info!("System tray created successfully");
     Ok(())
 }
-
-fn show_settings_window<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Attempting to show settings window...");
-    
-    // Check if settings window already exists
-    if let Some(window) = app.get_webview_window("settings") {
-        info!("Settings window already exists, showing it");
-        window.show()?;
-        window.set_focus()?;
-        return Ok(());
-    }
-    
-    info!("Creating new settings window");
-    
-    // Create new settings window
-    let _settings_window = tauri::WebviewWindowBuilder::new(
-        app,
-        "settings",
-        tauri::WebviewUrl::App("settings.html".into()),
-    )
-    .title("VWisper Settings")
-    .inner_size(500.0, 400.0)
-    .min_inner_size(400.0, 300.0)
-    .center()
-    .resizable(true)
-    .decorations(true)
-    .always_on_top(false)
-    .skip_taskbar(false)
-    .visible(true)
-    .build()?;
-    
-    info!("Settings window created and shown");
-    Ok(())
-} 

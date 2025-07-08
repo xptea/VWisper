@@ -152,8 +152,11 @@ fn start_speech_to_text_session(app_handle: tauri::AppHandle) -> Result<(), Box<
     
     // Drain any stale audio that might remain from a previous session so that
     // we never leak the last words of the *previous* hot-key press into the
-    // next.
-    while receiver.try_recv().is_ok() {}
+    // next. Limit drain to prevent delays.
+    let mut drain_count = 0;
+    while receiver.try_recv().is_ok() && drain_count < 100 {
+        drain_count += 1;
+    }
     
     // Start audio processor
     let mut processor_guard = AUDIO_PROCESSOR.lock().unwrap();
@@ -237,13 +240,15 @@ pub fn start_recording(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
     
-    // Play start sound
-    crate::modules::audio::sound::play_start_sound();
-    
-    // Start audio recording and speech-to-text processing
+    // Start audio recording and speech-to-text processing immediately
     if let Err(e) = start_speech_to_text_session(app.clone()) {
         error!("Failed to start speech-to-text session: {}", e);
         return Err(e.to_string());
+    }
+    
+    // Emit event for frontend to play start sound
+    if let Err(e) = app.emit("play-sound", "start") {
+        error!("Failed to emit play-sound event for start: {}", e);
     }
     
     // Emit event to frontend about recording state
@@ -324,11 +329,16 @@ pub fn toggle_wave_window_and_recording(app: tauri::AppHandle) -> Result<(), Str
 pub fn show_wave_window_and_start_recording(app: tauri::AppHandle) -> Result<(), String> {
     info!("Showing wave window and starting recording");
     
-    // First show the window in small mode
-    show_wave_window(app.clone())?;
+    // Start recording immediately for minimal delay
+    start_recording(app.clone())?;
     
-    // Then start recording
-    start_recording(app)?;
+    // Show the window concurrently (don't wait for it)
+    let app_clone = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = show_wave_window(app_clone) {
+            error!("Failed to show wave window: {}", e);
+        }
+    });
     
     Ok(())
 }
@@ -440,7 +450,9 @@ pub fn show_dashboard_window(app: tauri::AppHandle) -> Result<(), String> {
         WebviewUrl::App("src/dashboard.html".into()),
     )
     .title("VWisper Dashboard")
-    .inner_size(1000.0, 700.0)
+    .inner_size(1235.0, 850.0)
+    .min_inner_size(1235.0, 800.0)
+    .max_inner_size(1400.0, 1300.0)
     .resizable(true)
     .center()
     .visible(true)
@@ -452,7 +464,7 @@ pub fn show_dashboard_window(app: tauri::AppHandle) -> Result<(), String> {
 
     match window_result {
         Ok(window) => {
-            info!("Dashboard window created successfully");
+            info!("Dashboard window created successfully with size 1235x850");
             
             // Force show and focus
             match window.show() {
@@ -465,17 +477,9 @@ pub fn show_dashboard_window(app: tauri::AppHandle) -> Result<(), String> {
                 Err(e) => error!("Window.set_focus() failed: {}", e),
             }
             
-            // Try to bring to front
-            match window.set_always_on_top(true) {
-                Ok(_) => {
-                    info!("Set always on top temporarily");
-                    // Remove always on top after a moment
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(500));
-                        let _ = window.set_always_on_top(false);
-                    });
-                },
-                Err(e) => error!("Failed to set always on top: {}", e),
+            // Verify the window size after creation
+            if let Ok(size) = window.inner_size() {
+                info!("Window inner size after creation: {}x{}", size.width, size.height);
             }
             
             info!("=== Dashboard window setup complete ===");
@@ -483,52 +487,6 @@ pub fn show_dashboard_window(app: tauri::AppHandle) -> Result<(), String> {
         Err(e) => {
             error!("Failed to create dashboard window: {}", e);
             return Err(format!("Window creation failed: {}", e));
-        }
-    }
-    
-    Ok(())
-}
-
-#[tauri::command]
-pub fn test_dashboard_creation(app: tauri::AppHandle) -> Result<(), String> {
-    info!("=== TEST: Creating dashboard window directly ===");
-    
-    // Always create a new dashboard window for testing
-    let window_result = WebviewWindowBuilder::new(
-        &app,
-        "dashboard-test",
-        WebviewUrl::App("src/dashboard.html".into()),
-    )
-    .title("VWisper Dashboard TEST")
-    .inner_size(800.0, 600.0)
-    .resizable(true)
-    .center()
-    .visible(true)
-    .focused(true)
-    .decorations(true)
-    .always_on_top(true)
-    .build();
-
-    match window_result {
-        Ok(window) => {
-            info!("TEST: Dashboard window created successfully");
-            
-            // Force show 
-            match window.show() {
-                Ok(_) => info!("TEST: Window.show() successful"),
-                Err(e) => error!("TEST: Window.show() failed: {}", e),
-            }
-            
-            match window.set_focus() {
-                Ok(_) => info!("TEST: Window.set_focus() successful"),
-                Err(e) => error!("TEST: Window.set_focus() failed: {}", e),
-            }
-            
-            info!("=== TEST: Dashboard window test complete ===");
-        },
-        Err(e) => {
-            error!("TEST: Failed to create dashboard window: {}", e);
-            return Err(format!("TEST: Window creation failed: {}", e));
         }
     }
     
@@ -615,9 +573,9 @@ pub fn transform_splash_to_dashboard(app: tauri::AppHandle) -> Result<(), String
         
         // Update window properties for dashboard
         let _ = window.set_title("VWisper Dashboard");
-        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 1000, height: 700 }));
+        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: 1235, height: 1140 }));
         let _ = window.set_resizable(true);
-        let _ = window.set_decorations(false);
+        let _ = window.set_decorations(true);
         let _ = window.set_always_on_top(false);
         let _ = window.set_skip_taskbar(false);
         let _ = window.center();
@@ -649,7 +607,8 @@ pub fn record_transcription_session(
     transcription_length: usize,
     processing_time_ms: u64,
     success: bool,
-    error_message: Option<String>
+    error_message: Option<String>,
+    transcribed_text: Option<String>
 ) -> Result<(), String> {
     let session = RecordingSession {
         id: Uuid::new_v4().to_string(),
@@ -660,6 +619,7 @@ pub fn record_transcription_session(
         processing_time_ms,
         success,
         error_message,
+        transcribed_text: transcribed_text.unwrap_or_default(),
     };
 
     // Update usage stats
@@ -682,6 +642,7 @@ pub fn get_formatted_usage_stats() -> Result<serde_json::Value, String> {
         "total_duration_ms": stats.total_duration_ms,
         "total_duration_formatted": stats.get_total_duration_formatted(),
         "average_duration_ms": stats.get_average_duration(),
+        "average_processing_time_ms": stats.get_average_processing_time(),
         "success_rate": stats.get_success_rate(),
         "successful_recordings": stats.successful_recordings,
         "failed_recordings": stats.failed_recordings,
@@ -691,4 +652,137 @@ pub fn get_formatted_usage_stats() -> Result<serde_json::Value, String> {
     });
     
     Ok(formatted_stats)
+}
+
+#[tauri::command]
+pub fn resize_dashboard_for_tab(app: tauri::AppHandle, tab: String) -> Result<(), String> {
+    info!("Resizing dashboard window for tab: {}", tab);
+    
+    if let Some(window) = app.get_webview_window("dashboard") {
+        let (width, height) = match tab.as_str() {
+            "analytics" => (1235, 820),
+            "playground" => (1235, 1140),
+            "settings" => (1235, 1200),
+            _ => {
+                warn!("Unknown tab: {}, using default playground size", tab);
+                (1235, 1140)
+            }
+        };
+        
+        info!("Setting window size to {}x{} for tab: {}", width, height, tab);
+        
+        // Add a small delay to ensure the window is ready
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        
+        // Ensure window is focused and visible before resizing
+        if let Err(e) = window.set_focus() {
+            warn!("Failed to focus window before resize: {}", e);
+        }
+        
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { 
+            width: width as u32, 
+            height: height as u32 
+        })) {
+            error!("Failed to resize window: {}", e);
+            return Err(e.to_string());
+        }
+        
+        // Re-center the window after resizing
+        if let Err(e) = window.center() {
+            error!("Failed to center window: {}", e);
+        }
+        
+        info!("Successfully resized window to {}x{} for tab: {}", width, height, tab);
+        Ok(())
+    } else {
+        error!("Dashboard window not found");
+        Err("Dashboard window not found".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    use std::process::Command;
+    
+    info!("Opening URL: {}", url);
+    
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/c", "start", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_data_directory() -> Result<String, String> {
+    match dirs::data_dir() {
+        Some(mut data_dir) => {
+            data_dir.push("vwisper");
+            Ok(data_dir.to_string_lossy().to_string())
+        }
+        None => Err("Failed to get data directory".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn read_version_file() -> Result<String, String> {
+    use std::path::PathBuf;
+    use std::fs;
+    
+    // Get the current executable directory
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Failed to get executable path: {}", e))?;
+    
+    let exe_dir = exe_path.parent()
+        .ok_or("Failed to get executable directory")?;
+    
+    let version_file = exe_dir.join("version.txt");
+    
+    // If version.txt doesn't exist in exe dir, try the app resources
+    let version_path = if version_file.exists() {
+        version_file
+    } else {
+        // For development, try to find version.txt in the project root
+        let mut project_root = exe_dir.to_path_buf();
+        
+        // Go up directories until we find version.txt or reach the root
+        for _ in 0..5 {
+            project_root = project_root.parent()
+                .ok_or("Could not find project root")?
+                .to_path_buf();
+            
+            let version_candidate = project_root.join("version.txt");
+            if version_candidate.exists() {
+                break;
+            }
+        }
+        
+        project_root.join("version.txt")
+    };
+    
+    info!("Reading version from: {}", version_path.display());
+    
+    fs::read_to_string(&version_path)
+        .map(|content| content.trim().to_string())
+        .map_err(|e| format!("Failed to read version file: {}", e))
 }

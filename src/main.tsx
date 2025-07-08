@@ -3,9 +3,8 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import App from "./App";
-import Settings from "./components/Settings";
 import Dashboard from "./components/Dashboard";
-import Splashscreen from "./components/SplashScreen";
+import Splashscreen from "./components/Splashscreen";
 
 // Main App Router Component
 const AppRouter: React.FC = () => {
@@ -45,10 +44,7 @@ const AppRouter: React.FC = () => {
   }
 
   // Route to appropriate component based on window label
-  if (currentWindow === "settings") {
-    console.log("Rendering settings component");
-    return <Settings />;
-  } else if (currentWindow === "dashboard") {
+  if (currentWindow === "dashboard") {
     console.log("Rendering dashboard component");
     return <Dashboard />;
   } else if (currentWindow === "wave-window" || currentWindow === "main") {

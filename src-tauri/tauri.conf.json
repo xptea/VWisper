@@ -15,8 +15,8 @@
       {
         "label": "splashscreen",
         "title": "VWisper",
-        "width": 300,
-        "height": 200,
+        "width": 1000,
+        "height": 1000,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
@@ -28,19 +28,19 @@
         "shadow": false
       },
       {
-        "label": "settings",
-        "title": "VWisper Settings",
-        "width": 500,
-        "height": 700,
-        "decorations": false,
-        "transparent": true,
+        "label": "dashboard",
+        "title": "VWisper Dashboard",
+        "width": 1235,
+        "height": 1140,
+        "decorations": true,
+        "transparent": false,
         "alwaysOnTop": false,
         "skipTaskbar": false,
         "resizable": true,
         "visible": false,
         "center": true,
-        "url": "src/settings.html",
-        "shadow": false
+        "url": "src/dashboard.html",
+        "shadow": true
       }
     ],
     "security": {

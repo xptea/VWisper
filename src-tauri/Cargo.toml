@@ -58,6 +58,8 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 x11 = { version = "2", features = ["xlib"] }
 alsa-sys = "0.3"
 
+# No additional Windows dependencies needed - using simple command approach
+
 [features]
 default = []
 jack = ["jack-sys"]
