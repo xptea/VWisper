@@ -43,12 +43,21 @@ pub fn init_text_injector() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn inject_text(text: &str) -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        info!("Injecting text on {}: '{}'", std::env::consts::OS, text);
-        
-        // Use balanced clipboard method for both Windows and macOS
+        info!("Injecting text on Windows: '{}'", text);
+
+        // Windows works reliably with the clipboard-based paste, keep as is.
         return inject_text_via_clipboard(text);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        info!("Injecting text on macOS via direct typing (clipboard-free): '{}'", text);
+
+        // Clipboard access from a background thread on macOS can crash due to Cocoa
+        // main-thread restrictions. Instead, type the text character-by-character.
+        return inject_text_char_by_character(text);
     }
     
     #[cfg(target_os = "linux")]
@@ -116,16 +125,30 @@ fn inject_text_via_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error
         let clipboard_result = {
             #[cfg(target_os = "macos")]
             {
-                // Use Cmd+V on macOS with balanced timing
-                injector.key(Key::Meta, Direction::Press)
-                    .and_then(|_| {
-                        thread::sleep(Duration::from_millis(15)); // Balanced delay
-                        injector.key(Key::Unicode('v'), Direction::Click)
-                    })
-                    .and_then(|_| {
-                        thread::sleep(Duration::from_millis(15)); // Balanced delay
-                        injector.key(Key::Meta, Direction::Release)
-                    })
+                // Use Cmd+V on macOS. Try Meta first, fall back to Command (deprecated) if that fails.
+                (|| {
+                    injector.key(Key::Meta, Direction::Press)
+                        .and_then(|_| {
+                            thread::sleep(Duration::from_millis(15));
+                            injector.key(Key::Unicode('v'), Direction::Click)
+                        })
+                        .and_then(|_| {
+                            thread::sleep(Duration::from_millis(15));
+                            injector.key(Key::Meta, Direction::Release)
+                        })
+                })()
+                .or_else(|e| {
+                    warn!("Meta variant failed for Cmd+V ({:?}), trying Command variant", e);
+                    injector.key(Key::Command, Direction::Press)
+                        .and_then(|_| {
+                            thread::sleep(Duration::from_millis(15));
+                            injector.key(Key::Unicode('v'), Direction::Click)
+                        })
+                        .and_then(|_| {
+                            thread::sleep(Duration::from_millis(15));
+                            injector.key(Key::Command, Direction::Release)
+                        })
+                })
             }
             
             #[cfg(target_os = "windows")]
@@ -196,5 +219,43 @@ fn inject_text_via_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error
         Ok(())
     } else {
         Err("Text injector not initialized for clipboard method".into())
+    }
+}
+
+// macOS-only helper that injects text without touching the clipboard. This avoids
+// crashes related to NSPasteboard access off the main thread.
+#[cfg(target_os = "macos")]
+fn inject_text_char_by_character(text: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use enigo::{Key, Direction};
+
+    // Get the global injector instance.
+    let mut injector_guard = TEXT_INJECTOR.lock().unwrap();
+    if let Some(injector) = injector_guard.as_mut() {
+        for ch in text.chars() {
+            match ch {
+                '\n' => {
+                    injector.key(Key::Return, Direction::Click)
+                        .map_err(|e| format!("Failed to inject newline: {}", e))?;
+                }
+                '\t' => {
+                    injector.key(Key::Tab, Direction::Click)
+                        .map_err(|e| format!("Failed to inject tab: {}", e))?;
+                }
+                _ => {
+                    // Enigo can type the whole remaining string at once, but we keep it
+                    // per-char for finer control and robustness.
+                    injector.text(&ch.to_string())
+                        .map_err(|e| format!("Failed to inject char '{}': {}", ch, e))?;
+                }
+            }
+
+            // Small balanced delay so we don't overwhelm the target app.
+            std::thread::sleep(std::time::Duration::from_millis(6));
+        }
+
+        info!("Character-by-character injection completed successfully on macOS");
+        Ok(())
+    } else {
+        Err("Text injector not initialised".into())
     }
 }

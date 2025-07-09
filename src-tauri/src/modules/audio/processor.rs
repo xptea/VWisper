@@ -60,63 +60,32 @@ fn resample_to_16k(input: &[f32], src_rate: u32) -> Vec<f32> {
     out
 }
 
-/// Preprocess audio for optimal speech recognition quality
-/// Enhanced processing to ensure better audio quality
+/// Preprocess audio for speech recognition – keep it *simple and safe*.
+/// The previous aggressive normalization and filtering introduced artefacts
+/// that harmed accuracy on macOS. For now we only:
+/// 1. Remove DC-offset
+/// 2. Normalise the signal to a consistent peak level (-1.0 … 1.0 range)
 fn preprocess_audio_for_speech(samples: &[f32]) -> Vec<f32> {
     if samples.is_empty() {
         return Vec::new();
     }
-    
-    let mut processed = samples.to_vec();
-    
+
     // 1. Remove DC offset
-    let mean = processed.iter().sum::<f32>() / processed.len() as f32;
-    for sample in &mut processed {
-        *sample -= mean;
-    }
-    
-    // 2. Enhanced normalization with better volume detection
-    let peak = processed.iter().map(|&x| x.abs()).fold(0.0, f32::max);
+    let mean = samples.iter().sum::<f32>() / samples.len() as f32;
+    let mut processed: Vec<f32> = samples.iter().map(|s| s - mean).collect();
+
+    // 2. Peak-normalise so the loudest sample reaches ~0.98.
+    let peak = processed
+        .iter()
+        .map(|x| x.abs())
+        .fold(0f32, f32::max);
+
     if peak > 0.0 {
-        // More aggressive normalization for better speech recognition
-        let scale = if peak < 0.05 {
-            // Boost very quiet audio significantly
-            0.4 / peak
-        } else if peak < 0.1 {
-            // Boost quiet audio moderately
-            0.3 / peak
-        } else if peak > 0.9 {
-            // Reduce very loud audio
-            0.8 / peak
-        } else {
-            // Leave normal levels alone
-            1.0
-        };
-        
-        if scale != 1.0 {
-            for sample in &mut processed {
-                *sample *= scale;
-            }
-        }
+        let scale = 0.98 / peak;
+        processed.iter_mut().for_each(|s| *s *= scale);
     }
-    
-    // 3. Apply gentle high-pass filter to remove low-frequency noise
-    let mut filtered = Vec::with_capacity(processed.len());
-    let alpha = 0.95; // High-pass filter coefficient
-    let mut prev = 0.0;
-    
-    for &sample in &processed {
-        let filtered_sample = alpha * (prev + sample - prev);
-        filtered.push(filtered_sample);
-        prev = sample;
-    }
-    
-    // 4. Soft limiting to prevent clipping
-    for sample in &mut filtered {
-        *sample = sample.clamp(-0.95, 0.95);
-    }
-    
-    filtered
+
+    processed
 }
 
 pub struct AudioProcessor {
@@ -318,10 +287,13 @@ fn handle_successful_transcription(app_handle: tauri::AppHandle, text: String) {
         }
         
         #[cfg(target_os = "macos")]
-        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
-        
+        {
+            std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        }
         #[cfg(not(target_os = "macos"))]
-        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        {
+            std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        }
         
         if let Err(e) = window.hide() {
             error!("Failed to hide window: {}", e);
@@ -331,10 +303,13 @@ fn handle_successful_transcription(app_handle: tauri::AppHandle, text: String) {
         
         // Add delay to ensure window focus is released
         #[cfg(target_os = "macos")]
-        std::thread::sleep(std::time::Duration::from_millis(50)); // Balanced timing for macOS
-        
+        {
+            std::thread::sleep(std::time::Duration::from_millis(50)); // Balanced timing for macOS
+        }
         #[cfg(not(target_os = "macos"))]
-        std::thread::sleep(std::time::Duration::from_millis(75)); // Balanced timing for other platforms
+        {
+            std::thread::sleep(std::time::Duration::from_millis(75)); // Balanced timing for other platforms
+        }
         
         // Now inject text after the window is hidden
         if let Err(e) = inject_text(&text) {
@@ -367,10 +342,13 @@ fn handle_empty_transcription(app_handle: &tauri::AppHandle) {
         }
         
         #[cfg(target_os = "macos")]
-        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
-        
+        {
+            std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        }
         #[cfg(not(target_os = "macos"))]
-        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        {
+            std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        }
         
         if let Err(e) = window.hide() {
             error!("Failed to hide window: {}", e);
@@ -393,10 +371,13 @@ fn handle_transcription_error(app_handle: &tauri::AppHandle) {
         }
         
         #[cfg(target_os = "macos")]
-        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
-        
+        {
+            std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        }
         #[cfg(not(target_os = "macos"))]
-        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        {
+            std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        }
         
         if let Err(e) = window.hide() {
             error!("Failed to hide window: {}", e);
@@ -424,10 +405,13 @@ fn handle_cancellation(app_handle: &tauri::AppHandle) {
         }
         
         #[cfg(target_os = "macos")]
-        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
-        
+        {
+            std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        }
         #[cfg(not(target_os = "macos"))]
-        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        {
+            std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        }
         
         if let Err(e) = window.hide() {
             error!("Failed to hide window: {}", e);
@@ -454,10 +438,13 @@ fn handle_insufficient_audio(app_handle: &tauri::AppHandle) {
         }
         
         #[cfg(target_os = "macos")]
-        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
-        
+        {
+            std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        }
         #[cfg(not(target_os = "macos"))]
-        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        {
+            std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        }
         
         if let Err(e) = window.hide() {
             error!("Failed to hide window: {}", e);
@@ -486,10 +473,13 @@ fn handle_no_audio(app_handle: &tauri::AppHandle) {
         }
         
         #[cfg(target_os = "macos")]
-        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
-        
+        {
+            std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        }
         #[cfg(not(target_os = "macos"))]
-        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        {
+            std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        }
         
         if let Err(e) = window.hide() {
             error!("Failed to hide window: {}", e);
