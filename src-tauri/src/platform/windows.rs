@@ -9,6 +9,9 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
         let mut last_control_state = false;
         let mut last_action_time = std::time::Instant::now();
         
+        log::info!("Windows balanced key monitoring started using device_query");
+        log::info!("Hold Control to record, release to process and see results");
+        
         loop {
             let keys: Vec<Keycode> = device_state.get_keys();
             let control_pressed = keys.contains(&Keycode::RControl); 
@@ -16,7 +19,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             // Check for key press (show window and start recording)
             if control_pressed && !last_control_state {
                 let now = std::time::Instant::now();
-                if now.duration_since(last_action_time) > Duration::from_millis(25) { // Reduced from 50ms to 25ms
+                if now.duration_since(last_action_time) > Duration::from_millis(25) { // Balanced debounce
                     last_action_time = now;
                     
                     // Show window and start recording
@@ -27,7 +30,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             // Check for key release (stop recording but keep window for processing)
             if !control_pressed && last_control_state {
                 let now = std::time::Instant::now();
-                if now.duration_since(last_action_time) > Duration::from_millis(25) { // Reduced from 50ms to 25ms
+                if now.duration_since(last_action_time) > Duration::from_millis(25) { // Balanced debounce
                     last_action_time = now;
                     
                     // Stop recording but keep window visible for processing
@@ -36,7 +39,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             }
             
             last_control_state = control_pressed;
-            thread::sleep(Duration::from_millis(10)); // Reduced from 50ms to 10ms for better responsiveness
+            thread::sleep(Duration::from_millis(15)); // Balanced polling for reliability
         }
     });
 }

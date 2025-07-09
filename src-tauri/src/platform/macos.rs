@@ -9,7 +9,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
         let mut last_control_state = false;
         let mut last_action_time = std::time::Instant::now();
         
-        log::info!("macOS key monitoring started using device_query");
+        log::info!("macOS balanced key monitoring started using device_query");
         log::info!("Hold Control to record, release to process and see results");
         
         loop {
@@ -19,7 +19,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             // Check for key press (show window and start recording)
             if control_pressed && !last_control_state {
                 let now = std::time::Instant::now();
-                if now.duration_since(last_action_time) > Duration::from_millis(100) {
+                if now.duration_since(last_action_time) > Duration::from_millis(25) { // Balanced debounce
                     last_action_time = now;
                     
                     // Show window and start recording
@@ -30,7 +30,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             // Check for key release (stop recording but keep window for processing)
             if !control_pressed && last_control_state {
                 let now = std::time::Instant::now();
-                if now.duration_since(last_action_time) > Duration::from_millis(100) {
+                if now.duration_since(last_action_time) > Duration::from_millis(25) { // Balanced debounce
                     last_action_time = now;
                     
                     // Stop recording but keep window visible for processing
@@ -39,7 +39,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
             }
             
             last_control_state = control_pressed;
-            thread::sleep(Duration::from_millis(50));
+            thread::sleep(Duration::from_millis(15)); // Balanced polling for reliability
         }
     });
 } 
