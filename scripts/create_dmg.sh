@@ -135,6 +135,9 @@ hdiutil create \
 MOUNT_DIR="$(mktemp -d /tmp/vwisper_dmg_mount_XXXX)"
 hdiutil attach "$TMP_DMG" -mountpoint "$MOUNT_DIR" -quiet -noverify -noautoopen
 
+# Wait a moment for the disk to be fully mounted
+sleep 2
+
 # If we have a background image, copy it into .background/ inside the dmg
 BG_SRC="${DMG_BACKGROUND_IMAGE:-$WORKSPACE_ROOT/scripts/dmg_background.png}"
 BG_DST="$MOUNT_DIR/.background"
@@ -151,29 +154,34 @@ fi
 info "Configuring Finder window layout"
 osascript <<EOF
 tell application "Finder"
-  tell disk "$VOLUME_NAME"
-    open
-    set current view of container window to icon view
-    set toolbar visible of container window to false
-    set statusbar visible of container window to false
-    set bounds of container window to {400, 120, 1000, 520}
+  delay 1
+  try
+    tell disk "$VOLUME_NAME"
+      open
+      set current view of container window to icon view
+      set toolbar visible of container window to false
+      set statusbar visible of container window to false
+      set bounds of container window to {400, 120, 1000, 520}
 
-    set viewOptions to the icon view options of container window
-    set arrangement of viewOptions to not arranged
-    set icon size of viewOptions to 128
-    if "$BG_REL_PATH" is not "" then
-      set background picture of viewOptions to file "$BG_REL_PATH"
-    end if
+      set viewOptions to the icon view options of container window
+      set arrangement of viewOptions to not arranged
+      set icon size of viewOptions to 128
+      if "$BG_REL_PATH" is not "" then
+        set background picture of viewOptions to file "$BG_REL_PATH"
+      end if
 
-    -- Position icons
-    set position of item "$APP_BUNDLE_NAME" of container window to {165, 185}
-    set position of item "Applications" of container window to {435, 185}
+      -- Position icons
+      set position of item "$APP_BUNDLE_NAME" of container window to {165, 185}
+      set position of item "Applications" of container window to {435, 185}
 
-    -- Refresh
-    update without registering applications
-    delay 1
-    close
-  end tell
+      -- Refresh
+      update without registering applications
+      delay 1
+      close
+    end tell
+  on error errMsg
+    log "Warning: Could not configure Finder layout: " & errMsg
+  end try
 end tell
 EOF
 

@@ -56,7 +56,7 @@ fn detect_macos_taskbar() -> Option<i32> {
     // This is a heuristic approach since macOS doesn't provide direct API access
     match Command::new("defaults").args(["read", "com.apple.dock", "autohide"]).output() {
         Ok(output) => {
-            let autohide = String::from_utf8_lossy(&output.stdout).trim();
+            let autohide = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if autohide == "1" {
                 // Dock is auto-hidden, so minimal padding needed
                 Some(20)
@@ -65,7 +65,7 @@ fn detect_macos_taskbar() -> Option<i32> {
                 // Try to get Dock position (bottom is most common)
                 match Command::new("defaults").args(["read", "com.apple.dock", "orientation"]).output() {
                     Ok(pos_output) => {
-                        let orientation = String::from_utf8_lossy(&pos_output.stdout).trim();
+                        let orientation = String::from_utf8_lossy(&pos_output.stdout).trim().to_string();
                         if orientation == "bottom" {
                             // Dock at bottom, use significant padding
                             Some(80)

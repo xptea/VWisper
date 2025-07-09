@@ -10,6 +10,8 @@ All notable changes to VWisper will be documented in this file.
 - **Added**: Percentage-based positioning (8% from bottom) for better adaptability across different screen sizes
 - **Added**: Smart Dock detection using macOS system preferences
 - **Fixed**: Wave window positioning issues when Dock is visible vs hidden
+- **Fixed**: Crash when injecting text via clipboard on macOS Sonoma
+- **Changed**: Switched macOS text injection to character-by-character typing for improved stability and reliability
 
 ### Windows
 - **Added**: Optimized text injection using clipboard method for faster performance
@@ -52,7 +54,7 @@ All notable changes to VWisper will be documented in this file.
 
 #### Technical Improvements
 - **Added**: ProcessingJob queue system for sequential audio processing
-- **Added**: Thread-safe queue management with Arc<Mutex>
+- **Added**: Thread-safe queue management with Arc
 - **Added**: Platform-specific timing optimizations
 - **Added**: Enhanced logging for debugging and monitoring
 
@@ -66,7 +68,8 @@ All notable changes to VWisper will be documented in this file.
 
 #### Changed
 - **Changed**: Audio processing from immediate to queue-based
-- **Changed**: Text injection from character-by-character to clipboard-based
+- **Changed**: Text injection from character-by-character to clipboard-based (Windows)
+- **Changed**: macOS now defaults to character-by-character text injection to avoid clipboard-related crashes
 - **Changed**: Key monitoring from ultra-fast to balanced timing
 - **Changed**: Audio preprocessing from minimal to enhanced filtering
 - **Changed**: Window positioning from fixed to dynamic calculation
