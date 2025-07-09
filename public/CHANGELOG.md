@@ -6,6 +6,8 @@ All notable changes to VWisper will be documented in this file.
 **[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.2)**
 
 ### macOS
+- **Added**: Fn key global hotkey monitoring using rdev crate for native macOS key detection
+- **Added**: Automatic fallback to FN key if Control key detection fails
 - **Added**: Dynamic taskbar detection and positioning - wave window automatically adjusts based on Dock visibility
 - **Added**: Percentage-based positioning (8% from bottom) for better adaptability across different screen sizes
 - **Added**: Smart Dock detection using macOS system preferences
@@ -115,7 +117,7 @@ All notable changes to VWisper will be documented in this file.
 - History of transcription sessions
 - Text playground for testing
 - Groq API integration
-- Global hotkey support (Right Ctrl for windows & linux or Left control on mac)
+- Global hotkey support (Right CTRL key on Windows & Linux and the FN key on Mac)
 - System tray integration
 - Cross-platform support (Windows, macOS, Linux)
 

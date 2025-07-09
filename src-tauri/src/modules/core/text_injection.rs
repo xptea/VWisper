@@ -91,7 +91,7 @@ pub fn inject_text(text: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[cfg(target_os = "windows")]
 fn inject_text_via_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error>> {
     use enigo::{Key, Direction};
     
@@ -112,68 +112,29 @@ fn inject_text_via_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error
     // Get the injector instance for keyboard simulation
     let mut injector_guard = TEXT_INJECTOR.lock().unwrap();
     if let Some(injector) = injector_guard.as_mut() {
-        // Balanced focus delay
-        #[cfg(target_os = "macos")]
-        let focus_delay = Duration::from_millis(75); // Balanced for macOS
-        
-        #[cfg(target_os = "windows")]
+        // Balanced focus delay for Windows
         let focus_delay = Duration::from_millis(100); // Balanced for Windows
         
         thread::sleep(focus_delay);
         
         // Try the clipboard approach first
         let clipboard_result = {
-            #[cfg(target_os = "macos")]
-            {
-                // Use Cmd+V on macOS. Try Meta first, fall back to Command (deprecated) if that fails.
-                (|| {
-                    injector.key(Key::Meta, Direction::Press)
-                        .and_then(|_| {
-                            thread::sleep(Duration::from_millis(15));
-                            injector.key(Key::Unicode('v'), Direction::Click)
-                        })
-                        .and_then(|_| {
-                            thread::sleep(Duration::from_millis(15));
-                            injector.key(Key::Meta, Direction::Release)
-                        })
-                })()
-                .or_else(|e| {
-                    warn!("Meta variant failed for Cmd+V ({:?}), trying Command variant", e);
-                    injector.key(Key::Command, Direction::Press)
-                        .and_then(|_| {
-                            thread::sleep(Duration::from_millis(15));
-                            injector.key(Key::Unicode('v'), Direction::Click)
-                        })
-                        .and_then(|_| {
-                            thread::sleep(Duration::from_millis(15));
-                            injector.key(Key::Command, Direction::Release)
-                        })
+            // Use Ctrl+V on Windows with balanced timing
+            injector.key(Key::Control, Direction::Press)
+                .and_then(|_| {
+                    thread::sleep(Duration::from_millis(20)); // Balanced delay
+                    injector.key(Key::Unicode('v'), Direction::Click)
                 })
-            }
-            
-            #[cfg(target_os = "windows")]
-            {
-                // Use Ctrl+V on Windows with balanced timing
-                injector.key(Key::Control, Direction::Press)
-                    .and_then(|_| {
-                        thread::sleep(Duration::from_millis(20)); // Balanced delay
-                        injector.key(Key::Unicode('v'), Direction::Click)
-                    })
-                    .and_then(|_| {
-                        thread::sleep(Duration::from_millis(20)); // Balanced delay
-                        injector.key(Key::Control, Direction::Release)
-                    })
-            }
+                .and_then(|_| {
+                    thread::sleep(Duration::from_millis(20)); // Balanced delay
+                    injector.key(Key::Control, Direction::Release)
+                })
         };
         
         match clipboard_result {
             Ok(_) => {
                 info!("Balanced paste successful");
                 // Balanced wait time for paste completion
-                #[cfg(target_os = "macos")]
-                thread::sleep(Duration::from_millis(75)); // Balanced for macOS
-                
-                #[cfg(target_os = "windows")]
                 thread::sleep(Duration::from_millis(100)); // Balanced for Windows
             }
             Err(e) => {
@@ -198,10 +159,6 @@ fn inject_text_via_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error
                         }
                     }
                     // Balanced delay between characters
-                    #[cfg(target_os = "macos")]
-                    thread::sleep(Duration::from_millis(8)); // Balanced for macOS
-                    
-                    #[cfg(target_os = "windows")]
                     thread::sleep(Duration::from_millis(10)); // Balanced for Windows
                 }
                 info!("Balanced character-by-character injection completed");

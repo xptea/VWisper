@@ -31,6 +31,7 @@ struct ProcessingJob {
     audio_data: Vec<f32>,
     sample_rate: u32,
     app_handle: tauri::AppHandle,
+    #[allow(dead_code)]
     timestamp: std::time::Instant,
 }
 

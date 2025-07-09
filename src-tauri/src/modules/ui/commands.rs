@@ -809,7 +809,7 @@ pub fn read_version_file() -> Result<String, String> {
     
     // If neither file exists, return a default version
     warn!("Could not find version.txt file, using default version");
-    Ok("1.0.1".to_string())
+    Ok("1.0.2".to_string())
 }
 
 
@@ -855,21 +855,7 @@ pub fn test_simple_text_injection() -> Result<String, String> {
     }
 }
 
-#[tauri::command]
-pub fn test_macos_positioning() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    {
-        let padding = detect_macos_taskbar();
-        let result = format!("macOS taskbar detection: {:?} pixels padding", padding);
-        info!("{}", result);
-        Ok(result)
-    }
-    
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok("macOS positioning test only available on macOS".to_string())
-    }
-}
+
 
 #[derive(serde::Serialize)]
 pub struct UpdateCheckResult {
