@@ -14,9 +14,25 @@ use crate::constants::{WAVE_WIDTH_COMPACT, WAVE_HEIGHT};
 use crate::modules::storage::{UsageStats, AnalyticsData, RecordingSession};
 use uuid::Uuid;
 use chrono::Utc;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 // Global flag to allow user-triggered cancellation of the current processing session
 static CANCEL_PROCESSING: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
+
+// Global processing queue to prevent overlapping sessions
+static PROCESSING_QUEUE: Lazy<Arc<Mutex<VecDeque<ProcessingJob>>>> = Lazy::new(|| {
+    Arc::new(Mutex::new(VecDeque::new()))
+});
+
+#[derive(Debug)]
+struct ProcessingJob {
+    audio_data: Vec<f32>,
+    sample_rate: u32,
+    app_handle: tauri::AppHandle,
+    timestamp: std::time::Instant,
+}
 
 /// Request the currently running `AudioProcessor` thread (if any) to cancel immediately.
 /// This simply flips an atomic flag that the processing thread inspects right after the
@@ -45,7 +61,7 @@ fn resample_to_16k(input: &[f32], src_rate: u32) -> Vec<f32> {
 }
 
 /// Preprocess audio for optimal speech recognition quality
-/// Minimal processing to preserve speech clarity
+/// Enhanced processing to ensure better audio quality
 fn preprocess_audio_for_speech(samples: &[f32]) -> Vec<f32> {
     if samples.is_empty() {
         return Vec::new();
@@ -53,21 +69,24 @@ fn preprocess_audio_for_speech(samples: &[f32]) -> Vec<f32> {
     
     let mut processed = samples.to_vec();
     
-    // 1. Remove DC offset only (this is always good)
+    // 1. Remove DC offset
     let mean = processed.iter().sum::<f32>() / processed.len() as f32;
     for sample in &mut processed {
         *sample -= mean;
     }
     
-    // 2. Gentle normalization - find peak and normalize if too quiet or too loud
+    // 2. Enhanced normalization with better volume detection
     let peak = processed.iter().map(|&x| x.abs()).fold(0.0, f32::max);
     if peak > 0.0 {
-        // Only normalize if the audio is very quiet (peak < 0.1) or very loud (peak > 0.9)
-        let scale = if peak < 0.1 {
-            // Boost quiet audio to 0.3 peak
+        // More aggressive normalization for better speech recognition
+        let scale = if peak < 0.05 {
+            // Boost very quiet audio significantly
+            0.4 / peak
+        } else if peak < 0.1 {
+            // Boost quiet audio moderately
             0.3 / peak
         } else if peak > 0.9 {
-            // Reduce loud audio to 0.8 peak
+            // Reduce very loud audio
             0.8 / peak
         } else {
             // Leave normal levels alone
@@ -81,12 +100,23 @@ fn preprocess_audio_for_speech(samples: &[f32]) -> Vec<f32> {
         }
     }
     
-    // 3. Only apply soft limiting to prevent hard clipping - no other filtering
-    for sample in &mut processed {
+    // 3. Apply gentle high-pass filter to remove low-frequency noise
+    let mut filtered = Vec::with_capacity(processed.len());
+    let alpha = 0.95; // High-pass filter coefficient
+    let mut prev = 0.0;
+    
+    for &sample in &processed {
+        let filtered_sample = alpha * (prev + sample - prev);
+        filtered.push(filtered_sample);
+        prev = sample;
+    }
+    
+    // 4. Soft limiting to prevent clipping
+    for sample in &mut filtered {
         *sample = sample.clamp(-0.95, 0.95);
     }
     
-    processed
+    filtered
 }
 
 pub struct AudioProcessor {
@@ -106,11 +136,13 @@ impl AudioProcessor {
         }
         
         self.is_processing = true;
-        debug!("Starting audio processing...");
+        debug!("Starting audio processing with dynamic queue...");
         
         thread::spawn(move || {
             let mut session_audio_mono = Vec::new();
             let chunk_duration_ms = 100; 
+            let mut silence_duration = 0;
+            let max_silence_duration = 2000; // 2 seconds of silence before auto-stop
 
             loop {
                 if !is_global_recording() {
@@ -121,15 +153,20 @@ impl AudioProcessor {
                 let chunk = collect_audio_chunk(&receiver, chunk_duration_ms, sample_rate);
                 
                 if chunk.is_empty() {
+                    silence_duration += chunk_duration_ms;
+                    if silence_duration > max_silence_duration {
+                        debug!("Too much silence, stopping recording");
+                        break;
+                    }
                     thread::sleep(Duration::from_millis(50));
                     continue;
+                } else {
+                    silence_duration = 0; // Reset silence counter
                 }
                 
                 send_audio_visualization(&app_handle, &chunk);
                 
                 // Convert to mono (audio from CPAL is typically interleaved if stereo)
-                // For most microphones, input is already mono, but some setups might give stereo
-                // We'll assume if we get pairs, it's stereo and average them
                 let mono_chunk: Vec<f32> = chunk.chunks(2)
                     .map(|c| if c.len() == 2 { 0.5 * (c[0] + c[1]) } else { c[0] })
                     .collect();
@@ -139,191 +176,42 @@ impl AudioProcessor {
                 thread::sleep(Duration::from_millis(20));
             }
             
-            // After recording ends, send entire session to Groq
+            // After recording ends, check if we have enough audio
             if CANCEL_PROCESSING.swap(false, Ordering::Acquire) {
                 info!("Processing cancelled by user, discarding audio");
+                self::handle_cancellation(&app_handle);
+                return;
+            }
 
-                // Notify the frontend that the transcription was cancelled
-                if let Err(e) = app_handle.emit("transcription-cancelled", ()) {
-                    error!("Failed to emit transcription-cancelled event: {}", e);
-                }
-
-                // Reset window size and hide it
-                if let Some(window) = app_handle.get_webview_window("wave-window") {
-                    // Tell the front-end to collapse the pill back to its compact state
-                    let _ = window.emit("wave-reset", ());
-
-                    // Resize to compact, wait for front-end collapse, then hide
-                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
-                        error!("Failed to reset window size: {}", e);
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(400));
-                    if let Err(e) = window.hide() {
-                        error!("Failed to hide window: {}", e);
-                    }
-                }
-
-                // Reset internal counter so the next session starts cleanly
-                crate::modules::ui::commands::reset_wave_window_counter_internal();
-
-                debug!("Audio processing thread cancelled");
+            // Ensure we have enough audio data before processing
+            let audio_duration_ms = (session_audio_mono.len() as f64 / sample_rate as f64 * 1000.0) as u64;
+            if audio_duration_ms < 200 { // Less than 200ms is too short
+                warn!("Audio too short ({}ms), discarding", audio_duration_ms);
+                self::handle_insufficient_audio(&app_handle);
                 return;
             }
 
             if !session_audio_mono.is_empty() {
-                // Calculate audio duration
-                let audio_duration_ms = (session_audio_mono.len() as f64 / sample_rate as f64 * 1000.0) as u64;
-                let processing_start = std::time::Instant::now();
+                // Add to processing queue instead of processing immediately
+                let job = ProcessingJob {
+                    audio_data: session_audio_mono,
+                    sample_rate,
+                    app_handle: app_handle.clone(),
+                    timestamp: std::time::Instant::now(),
+                };
                 
-                // Emit processing started event
-                if let Err(e) = app_handle.emit("transcription-started", ()) {
-                    error!("Failed to emit transcription-started event: {}", e);
-                }
+                let mut queue = PROCESSING_QUEUE.lock().unwrap();
+                queue.push_back(job);
+                info!("Added audio job to queue ({}ms, queue size: {})", audio_duration_ms, queue.len());
                 
-                match transcribe_with_groq(&session_audio_mono, sample_rate) {
-                    Ok(text) if !text.trim().is_empty() => {
-                        let processing_duration = processing_start.elapsed().as_millis() as u64;
-                        info!("Final transcript: {}", text);
-                        
-                        // Record successful session
-                        record_session(audio_duration_ms, processing_duration, &text, true, None);
-                        
-                        // Emit transcription completed event
-                        if let Err(e) = app_handle.emit("transcription-completed", &text) {
-                            error!("Failed to emit transcription-completed event: {}", e);
-                        }
-                        
-                        // Reset window size and hide BEFORE injecting text (so text goes to the right place)
-                        let window_handle = app_handle.clone();
-                        let text_to_inject = text.clone();
-                        std::thread::spawn(move || {
-                            if let Some(window) = window_handle.get_webview_window("wave-window") {
-                                // Tell the front-end to collapse the pill back to its compact state
-                                let _ = window.emit("wave-reset", ());
-
-                                // Resize to compact, wait for front-end collapse, then hide
-                                if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
-                                    error!("Failed to reset window size: {}", e);
-                                }
-                                std::thread::sleep(std::time::Duration::from_millis(400));
-                                if let Err(e) = window.hide() {
-                                    error!("Failed to hide window: {}", e);
-                                }
-                                
-                                info!("Wave window hidden, now injecting text");
-                                
-                                // Add extra delay to ensure window focus is released and user can focus target app
-                                std::thread::sleep(std::time::Duration::from_millis(200));
-                                
-                                // Now inject text after the window is hidden
-                                if let Err(e) = inject_text(&text_to_inject) {
-                                    error!("Failed to inject text: {}", e);
-                                    // Emit event for frontend to play error sound
-                                    if let Err(e) = window_handle.emit("play-sound", "error") {
-                                        error!("Failed to emit play-sound event for error: {}", e);
-                                    }
-                                } else {
-                                    // Emit event for frontend to play ending sound
-                                    if let Err(e) = window_handle.emit("play-sound", "ending") {
-                                        error!("Failed to emit play-sound event for ending: {}", e);
-                                    }
-                                }
-                            }
-                            
-                            // Reset window counter
-                            crate::modules::ui::commands::reset_wave_window_counter_internal();
-                        });
-                    }
-                    Ok(_) => {
-                        let processing_duration = processing_start.elapsed().as_millis() as u64;
-                        info!("No transcript generated.");
-                        
-                        // Record empty session
-                        record_session(audio_duration_ms, processing_duration, "", true, Some("Empty transcription".to_string()));
-                        
-                        // Emit transcription completed with empty text
-                        if let Err(e) = app_handle.emit("transcription-completed", "") {
-                            error!("Failed to emit transcription-completed event: {}", e);
-                        }
-                        
-                        // Reset window size and hide after empty processing
-                        if let Some(window) = app_handle.get_webview_window("wave-window") {
-                            // Tell the front-end to collapse the pill back to its compact state
-                            let _ = window.emit("wave-reset", ());
-
-                            // Resize to compact, wait for front-end collapse, then hide
-                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
-                                error!("Failed to reset window size: {}", e);
-                            }
-                            std::thread::sleep(std::time::Duration::from_millis(400));
-                            if let Err(e) = window.hide() {
-                                error!("Failed to hide window: {}", e);
-                            }
-                        }
-                        
-                        // Reset window counter
-                        crate::modules::ui::commands::reset_wave_window_counter_internal();
-                    }
-                    Err(e) => {
-                        let processing_duration = processing_start.elapsed().as_millis() as u64;
-                        error!("Groq transcription failed: {}", e);
-                        
-                        // Record failed session
-                        record_session(audio_duration_ms, processing_duration, "", false, Some(e.to_string()));
-                        
-                        // Emit event for frontend to play error sound
-                        if let Err(e) = app_handle.emit("play-sound", "error") {
-                            error!("Failed to emit play-sound event for error: {}", e);
-                        }
-                        
-                        // Emit transcription error event
-                        if let Err(e) = app_handle.emit("transcription-error", e.to_string()) {
-                            error!("Failed to emit transcription-error event: {}", e);
-                        }
-                        
-                        // Reset window size and hide after error
-                        if let Some(window) = app_handle.get_webview_window("wave-window") {
-                            // Tell the front-end to collapse the pill back to its compact state
-                            let _ = window.emit("wave-reset", ());
-
-                            // Resize to compact, wait for front-end collapse, then hide
-                            if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
-                                error!("Failed to reset window size: {}", e);
-                            }
-                            std::thread::sleep(std::time::Duration::from_millis(400));
-                            if let Err(e) = window.hide() {
-                                error!("Failed to hide window: {}", e);
-                            }
-                        }
-                        
-                        // Reset window counter
-                        crate::modules::ui::commands::reset_wave_window_counter_internal();
-                    }
-                }
+                // Process queue in background
+                let queue_clone = PROCESSING_QUEUE.clone();
+                thread::spawn(move || {
+                    process_queue(queue_clone);
+                });
             } else {
-                // No audio captured – still reset window and notify frontend so UI collapses.
-                warn!("No audio captured in session – collapsing window");
-
-                // Inform frontend that processing is done without result
-                if let Err(e) = app_handle.emit("transcription-completed", "") {
-                    error!("Failed to emit empty transcription-completed event: {}", e);
-                }
-
-                if let Some(window) = app_handle.get_webview_window("wave-window") {
-                    // Tell the front-end to collapse the pill back to its compact state
-                    let _ = window.emit("wave-reset", ());
-
-                    // Resize to compact, wait for front-end collapse, then hide
-                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
-                        error!("Failed to reset window size: {}", e);
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(400));
-                    if let Err(e) = window.hide() {
-                        error!("Failed to hide window: {}", e);
-                    }
-                }
-
-                crate::modules::ui::commands::reset_wave_window_counter_internal();
+                warn!("No audio captured in session");
+                self::handle_no_audio(&app_handle);
             }
 
             debug!("Audio processing thread ended");
@@ -334,6 +222,281 @@ impl AudioProcessor {
         self.is_processing = false;
         debug!("Audio processing stopped");
     }
+}
+
+fn process_queue(queue: Arc<Mutex<VecDeque<ProcessingJob>>>) {
+    loop {
+        let job = {
+            let mut queue_guard = queue.lock().unwrap();
+            queue_guard.pop_front()
+        };
+        
+        if let Some(job) = job {
+            info!("Processing audio job (queue size: {})", queue.lock().unwrap().len());
+            
+            let audio_duration_ms = (job.audio_data.len() as f64 / job.sample_rate as f64 * 1000.0) as u64;
+            let processing_start = std::time::Instant::now();
+            
+            // Emit processing started event
+            if let Err(e) = job.app_handle.emit("transcription-started", ()) {
+                error!("Failed to emit transcription-started event: {}", e);
+            }
+            
+            match transcribe_with_groq(&job.audio_data, job.sample_rate) {
+                Ok(text) if !text.trim().is_empty() => {
+                    let processing_duration = processing_start.elapsed().as_millis() as u64;
+                    info!("Final transcript: {}", text);
+                    
+                    // Record successful session
+                    record_session(audio_duration_ms, processing_duration, &text, true, None);
+                    
+                    // Emit transcription completed event
+                    if let Err(e) = job.app_handle.emit("transcription-completed", &text) {
+                        error!("Failed to emit transcription-completed event: {}", e);
+                    }
+                    
+                    // Inject text with proper timing
+                    let app_handle = job.app_handle.clone();
+                    let text_to_inject = text.clone();
+                    thread::spawn(move || {
+                        self::handle_successful_transcription(app_handle, text_to_inject);
+                    });
+                }
+                Ok(_) => {
+                    let processing_duration = processing_start.elapsed().as_millis() as u64;
+                    info!("No transcript generated from {}ms audio", audio_duration_ms);
+                    
+                    // Record empty session
+                    record_session(audio_duration_ms, processing_duration, "", true, Some("Empty transcription".to_string()));
+                    
+                    // Emit transcription completed with empty text
+                    if let Err(e) = job.app_handle.emit("transcription-completed", "") {
+                        error!("Failed to emit transcription-completed event: {}", e);
+                    }
+                    
+                    self::handle_empty_transcription(&job.app_handle);
+                }
+                Err(e) => {
+                    let processing_duration = processing_start.elapsed().as_millis() as u64;
+                    error!("Groq transcription failed: {}", e);
+                    
+                    // Record failed session
+                    record_session(audio_duration_ms, processing_duration, "", false, Some(e.to_string()));
+                    
+                    // Emit event for frontend to play error sound
+                    if let Err(e) = job.app_handle.emit("play-sound", "error") {
+                        error!("Failed to emit play-sound event for error: {}", e);
+                    }
+                    
+                    // Emit transcription error event
+                    if let Err(e) = job.app_handle.emit("transcription-error", e.to_string()) {
+                        error!("Failed to emit transcription-error event: {}", e);
+                    }
+                    
+                    self::handle_transcription_error(&job.app_handle);
+                }
+            }
+        } else {
+            // No more jobs in queue
+            break;
+        }
+        
+        // Small delay between processing jobs to prevent overwhelming the system
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn handle_successful_transcription(app_handle: tauri::AppHandle, text: String) {
+    // Reset window size and hide BEFORE injecting text
+    if let Some(window) = app_handle.get_webview_window("wave-window") {
+        // Tell the front-end to collapse the pill back to its compact state
+        let _ = window.emit("wave-reset", ());
+
+        // Resize to compact, wait for front-end collapse, then hide
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
+            error!("Failed to reset window size: {}", e);
+        }
+        
+        #[cfg(target_os = "macos")]
+        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        
+        #[cfg(not(target_os = "macos"))]
+        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        
+        if let Err(e) = window.hide() {
+            error!("Failed to hide window: {}", e);
+        }
+        
+        info!("Wave window hidden, now injecting text");
+        
+        // Add delay to ensure window focus is released
+        #[cfg(target_os = "macos")]
+        std::thread::sleep(std::time::Duration::from_millis(50)); // Balanced timing for macOS
+        
+        #[cfg(not(target_os = "macos"))]
+        std::thread::sleep(std::time::Duration::from_millis(75)); // Balanced timing for other platforms
+        
+        // Now inject text after the window is hidden
+        if let Err(e) = inject_text(&text) {
+            error!("Failed to inject text: {}", e);
+            // Emit event for frontend to play error sound
+            if let Err(e) = app_handle.emit("play-sound", "error") {
+                error!("Failed to emit play-sound event for error: {}", e);
+            }
+        } else {
+            // Emit event for frontend to play ending sound
+            if let Err(e) = app_handle.emit("play-sound", "ending") {
+                error!("Failed to emit play-sound event for ending: {}", e);
+            }
+        }
+    }
+    
+    // Reset window counter
+    crate::modules::ui::commands::reset_wave_window_counter_internal();
+}
+
+fn handle_empty_transcription(app_handle: &tauri::AppHandle) {
+    // Reset window size and hide after empty processing
+    if let Some(window) = app_handle.get_webview_window("wave-window") {
+        // Tell the front-end to collapse the pill back to its compact state
+        let _ = window.emit("wave-reset", ());
+
+        // Resize to compact, wait for front-end collapse, then hide
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
+            error!("Failed to reset window size: {}", e);
+        }
+        
+        #[cfg(target_os = "macos")]
+        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        
+        #[cfg(not(target_os = "macos"))]
+        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        
+        if let Err(e) = window.hide() {
+            error!("Failed to hide window: {}", e);
+        }
+    }
+    
+    // Reset window counter
+    crate::modules::ui::commands::reset_wave_window_counter_internal();
+}
+
+fn handle_transcription_error(app_handle: &tauri::AppHandle) {
+    // Reset window size and hide after error
+    if let Some(window) = app_handle.get_webview_window("wave-window") {
+        // Tell the front-end to collapse the pill back to its compact state
+        let _ = window.emit("wave-reset", ());
+
+        // Resize to compact, wait for front-end collapse, then hide
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
+            error!("Failed to reset window size: {}", e);
+        }
+        
+        #[cfg(target_os = "macos")]
+        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        
+        #[cfg(not(target_os = "macos"))]
+        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        
+        if let Err(e) = window.hide() {
+            error!("Failed to hide window: {}", e);
+        }
+    }
+    
+    // Reset window counter
+    crate::modules::ui::commands::reset_wave_window_counter_internal();
+}
+
+fn handle_cancellation(app_handle: &tauri::AppHandle) {
+    // Notify the frontend that the transcription was cancelled
+    if let Err(e) = app_handle.emit("transcription-cancelled", ()) {
+        error!("Failed to emit transcription-cancelled event: {}", e);
+    }
+
+    // Reset window size and hide it
+    if let Some(window) = app_handle.get_webview_window("wave-window") {
+        // Tell the front-end to collapse the pill back to its compact state
+        let _ = window.emit("wave-reset", ());
+
+        // Resize to compact, wait for front-end collapse, then hide
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
+            error!("Failed to reset window size: {}", e);
+        }
+        
+        #[cfg(target_os = "macos")]
+        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        
+        #[cfg(not(target_os = "macos"))]
+        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        
+        if let Err(e) = window.hide() {
+            error!("Failed to hide window: {}", e);
+        }
+    }
+
+    // Reset internal counter so the next session starts cleanly
+    crate::modules::ui::commands::reset_wave_window_counter_internal();
+}
+
+fn handle_insufficient_audio(app_handle: &tauri::AppHandle) {
+    // Inform frontend that processing is done without result
+    if let Err(e) = app_handle.emit("transcription-completed", "") {
+        error!("Failed to emit empty transcription-completed event: {}", e);
+    }
+
+    if let Some(window) = app_handle.get_webview_window("wave-window") {
+        // Tell the front-end to collapse the pill back to its compact state
+        let _ = window.emit("wave-reset", ());
+
+        // Resize to compact, wait for front-end collapse, then hide
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
+            error!("Failed to reset window size: {}", e);
+        }
+        
+        #[cfg(target_os = "macos")]
+        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        
+        #[cfg(not(target_os = "macos"))]
+        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        
+        if let Err(e) = window.hide() {
+            error!("Failed to hide window: {}", e);
+        }
+    }
+
+    crate::modules::ui::commands::reset_wave_window_counter_internal();
+}
+
+fn handle_no_audio(app_handle: &tauri::AppHandle) {
+    // No audio captured – still reset window and notify frontend so UI collapses.
+    warn!("No audio captured in session – collapsing window");
+
+    // Inform frontend that processing is done without result
+    if let Err(e) = app_handle.emit("transcription-completed", "") {
+        error!("Failed to emit empty transcription-completed event: {}", e);
+    }
+
+    if let Some(window) = app_handle.get_webview_window("wave-window") {
+        // Tell the front-end to collapse the pill back to its compact state
+        let _ = window.emit("wave-reset", ());
+
+        // Resize to compact, wait for front-end collapse, then hide
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
+            error!("Failed to reset window size: {}", e);
+        }
+        
+        #[cfg(target_os = "macos")]
+        std::thread::sleep(std::time::Duration::from_millis(100)); // Balanced timing for macOS
+        
+        #[cfg(not(target_os = "macos"))]
+        std::thread::sleep(std::time::Duration::from_millis(150)); // Balanced timing for other platforms
+        
+        if let Err(e) = window.hide() {
+            error!("Failed to hide window: {}", e);
+        }
+    }
+
+    crate::modules::ui::commands::reset_wave_window_counter_internal();
 }
 
 fn transcribe_with_groq(audio_mono: &[f32], src_rate: u32) -> Result<String, Box<dyn std::error::Error>> {

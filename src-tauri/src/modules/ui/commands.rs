@@ -48,6 +48,79 @@ fn create_wave_window(app: &tauri::AppHandle) -> Result<(), String> {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn detect_macos_taskbar() -> Option<i32> {
+    use std::process::Command;
+    
+    // Try to detect if Dock is visible and get its height
+    // This is a heuristic approach since macOS doesn't provide direct API access
+    match Command::new("defaults").args(["read", "com.apple.dock", "autohide"]).output() {
+        Ok(output) => {
+            let autohide = String::from_utf8_lossy(&output.stdout).trim();
+            if autohide == "1" {
+                // Dock is auto-hidden, so minimal padding needed
+                Some(20)
+            } else {
+                // Dock is visible, use larger padding
+                // Try to get Dock position (bottom is most common)
+                match Command::new("defaults").args(["read", "com.apple.dock", "orientation"]).output() {
+                    Ok(pos_output) => {
+                        let orientation = String::from_utf8_lossy(&pos_output.stdout).trim();
+                        if orientation == "bottom" {
+                            // Dock at bottom, use significant padding
+                            Some(80)
+                        } else {
+                            // Dock at left/right, use minimal padding
+                            Some(20)
+                        }
+                    }
+                    Err(_) => {
+                        // Fallback: assume dock is at bottom and visible
+                        Some(80)
+                    }
+                }
+            }
+        }
+        Err(_) => {
+            // Fallback: assume dock is visible at bottom
+            Some(80)
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn detect_macos_taskbar() -> Option<i32> {
+    None
+}
+
+fn calculate_optimal_position(mon_size: tauri::PhysicalSize<u32>, mon_pos: tauri::PhysicalPosition<i32>, win_w: i32, win_h: i32) -> (i32, i32) {
+    // Center horizontally
+    let x = mon_pos.x + (mon_size.width as i32 - win_w) / 2;
+    
+    // Calculate vertical position with dynamic padding
+    let base_padding = 60; // Default padding
+    
+    #[cfg(target_os = "macos")]
+    let dynamic_padding = detect_macos_taskbar().unwrap_or(base_padding);
+    
+    #[cfg(not(target_os = "macos"))]
+    let dynamic_padding = base_padding;
+    
+    // Use percentage-based positioning for better adaptability
+    let screen_height = mon_size.height as i32;
+    let percentage_from_bottom = 0.08; // 8% from bottom of screen
+    let pixel_padding = (screen_height as f32 * percentage_from_bottom) as i32;
+    
+    // Use the larger of dynamic padding or percentage-based padding
+    let final_padding = std::cmp::max(dynamic_padding, pixel_padding);
+    
+    let y = mon_pos.y + screen_height - win_h - final_padding;
+    
+    info!("Positioning wave window: x={}, y={}, padding={}, screen_height={}", x, y, final_padding, screen_height);
+    
+    (x, y)
+}
+
 #[tauri::command]
 pub fn show_wave_window(app: tauri::AppHandle) -> Result<(), String> {
     info!("Showing wave window");
@@ -69,10 +142,8 @@ pub fn show_wave_window(app: tauri::AppHandle) -> Result<(), String> {
             let win_w = WAVE_WIDTH_COMPACT;
             let win_h = WAVE_HEIGHT;
 
-            // Center horizontally & move near the bottom with padding.
-            let x = mon_pos.x + (mon_size.width as i32 - win_w) / 2;
-            let padding_bottom = 60; // pixels above the bottom edge
-            let y = mon_pos.y + (mon_size.height as i32) - win_h - padding_bottom;
+            // Use dynamic positioning
+            let (x, y) = calculate_optimal_position(mon_size.clone(), mon_pos.clone(), win_w, win_h);
 
             if let Err(e) = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
                 error!("Failed to set window position: {}", e);
@@ -781,6 +852,22 @@ pub fn test_simple_text_injection() -> Result<String, String> {
             error!("{}", error_msg);
             Err(error_msg)
         }
+    }
+}
+
+#[tauri::command]
+pub fn test_macos_positioning() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let padding = detect_macos_taskbar();
+        let result = format!("macOS taskbar detection: {:?} pixels padding", padding);
+        info!("{}", result);
+        Ok(result)
+    }
+    
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok("macOS positioning test only available on macOS".to_string())
     }
 }
 
