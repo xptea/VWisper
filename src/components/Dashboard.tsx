@@ -1,29 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  Clock,
-  FileText,
-  TrendingUp,
-  Mic,
-  CheckCircle,
-  XCircle,
   RotateCcw,
   Github,
   Sun,
   Moon,
   Monitor,
-  BookOpen
+  BookOpen,
+  Play,
+  BarChart3,
+  History as HistoryIcon,
+  Settings as SettingsIcon
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import ReactMarkdown from 'react-markdown';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar';
 import iconPath from '../assets/icon.png';
 
 // Import our separate components
@@ -31,6 +39,8 @@ import Playground from './dashboard/Playground';
 import Analytics from './dashboard/Analytics';
 import History from './dashboard/History';
 import Settings from './dashboard/Settings';
+import Onboarding from './dashboard/Onboarding';
+import Changelog from './dashboard/Changelog';
 
 interface DashboardStats {
   total_recordings: number;
@@ -70,7 +80,7 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
+  const [isRecording] = useState(false);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
@@ -82,8 +92,7 @@ const Dashboard: React.FC = () => {
   const [liveTranscriptionText, setLiveTranscriptionText] = useState<string>('');
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<{ type: 'success' | 'error' | 'update'; message: string } | null>(null);
-  const [changelogOpen, setChangelogOpen] = useState(false);
-  const [changelogContent, setChangelogContent] = useState<string>('');
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -121,6 +130,9 @@ const Dashboard: React.FC = () => {
       setAnalytics(analyticsData);
       setSettings(settingsData);
       setDataDirectory(dataDir);
+      
+      // Check if user needs onboarding (no API key)
+      setShowOnboarding(!settingsData.groq_api_key || settingsData.groq_api_key.trim() === '');
       
       // Set theme from settings or default to system
       const userTheme = settingsData.theme || 'system';
@@ -222,18 +234,18 @@ const Dashboard: React.FC = () => {
         if (result.has_update) {
           setUpdateStatus({
             type: 'update',
-            message: `A new version (v${result.remote_version}) is available! You are currently running v${result.local_version}.`
+            message: `New version ${result.remote_version} is available! You're currently running v${result.local_version}.`
           });
         } else {
           setUpdateStatus({
             type: 'success',
-            message: `You are running the latest version (v${result.local_version}).`
+            message: `You're running the latest version (v${result.local_version}).`
           });
         }
       } else {
         setUpdateStatus({
           type: 'error',
-          message: result.error_message || 'Failed to check for updates. Please check your internet connection.'
+          message: result.error_message || 'Failed to check for updates.'
         });
       }
     } catch (error) {
@@ -255,33 +267,10 @@ const Dashboard: React.FC = () => {
     }
   };
 
-
-
-  const formatDuration = (ms: number): string => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${seconds}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    } else {
-      return `${seconds}s`;
-    }
-  };
-
-  const getSuccessRate = (): number => {
-    if (!stats || stats.total_recordings === 0) return 0;
-    return (stats.successful_recordings / stats.total_recordings) * 100;
-  };
-
   const handleQuickAction = async (action: string) => {
     try {
       if (action === 'record') {
-        setIsRecording(!isRecording);
-        await invoke('toggle_recording');
+        // Handle record action
       } else if (action === 'refresh') {
         await loadDashboardData();
       }
@@ -313,7 +302,7 @@ const Dashboard: React.FC = () => {
       });
       setApiKeyValid(isValid);
       if (!isValid) {
-        setMessage({ type: 'error', text: 'API key is invalid' });
+        setMessage({ type: 'error', text: 'API key is invalid or expired' });
       }
     } catch (error) {
       console.error("Failed to test API key:", error);
@@ -335,119 +324,220 @@ const Dashboard: React.FC = () => {
     saveSettings(updated);
   };
 
-  const handleTabChange = async (newTab: string) => {
-    setActiveTab(newTab);
+  const handleOnboardingComplete = async (apiKey: string) => {
+    if (!settings) return;
+    
+    // Update settings with the API key
+    const updated = { ...settings, groq_api_key: apiKey } as AppSettings;
+    setSettings(updated);
+    await saveSettings(updated);
+    
+    // Hide onboarding and reload data
+    setShowOnboarding(false);
+    setMessage({ type: 'success', text: 'Welcome to VWisper! Your setup is complete.' });
+    setTimeout(() => setMessage(null), 4000);
+    
+    // Reload dashboard data to reflect the new settings
+    await loadDashboardData();
   };
 
-  const openChangelog = async () => {
+  const handleOnboardingApiTest = async (apiKey: string): Promise<boolean> => {
     try {
-      const resp = await fetch('/CHANGELOG.md');
-      const txt = await resp.text();
-      setChangelogContent(txt);
-    } catch {
-      setChangelogContent('Failed to load changelog.');
-    } finally {
-      setChangelogOpen(true);
+      return await invoke<boolean>("test_groq_api_key", { apiKey });
+    } catch (error) {
+      console.error("Failed to test API key during onboarding:", error);
+      return false;
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background text-foreground p-6">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header Skeleton */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-4 w-96" />
+      <SidebarProvider>
+        <div className="min-h-screen bg-background text-foreground flex">
+          <Sidebar variant="sidebar" className="border-r">
+            <SidebarHeader className="border-b p-4">
+              <div className="flex items-center space-x-3">
+                <img src={iconPath} alt="VWisper" className="w-8 h-8" />
+                <span className="font-semibold text-lg">VWisper</span>
+              </div>
+            </SidebarHeader>
+            <SidebarContent className="p-4">
+              <SidebarGroup>
+                <SidebarGroupLabel className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Loading...
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
+          </Sidebar>
+          <SidebarInset>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[...Array(4)].map((_, i) => (
+                  <Card key={i}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-4" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-8 w-16 mb-1" />
+                      <Skeleton className="h-3 w-20" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              <Skeleton className="h-96 w-full" />
             </div>
-            <div className="flex space-x-2">
-              <Skeleton className="h-10 w-10" />
-              <Skeleton className="h-10 w-10" />
-              <Skeleton className="h-10 w-10" />
-            </div>
-          </div>
-
-          {/* Stats Cards Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-16 mb-2" />
-                  <Skeleton className="h-3 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Chart Skeleton */}
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-64 w-full" />
-            </CardContent>
-          </Card>
+          </SidebarInset>
         </div>
-      </div>
+      </SidebarProvider>
+    );
+  }
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'playground':
+        return (
+          <Playground 
+            isRecording={isRecording}
+            liveTranscriptionText={liveTranscriptionText}
+            setLiveTranscriptionText={setLiveTranscriptionText}
+            settings={settings}
+          />
+        );
+      case 'analytics':
+        return <Analytics analytics={analytics} stats={stats} />;
+      case 'history':
+        return (
+          <History 
+            settings={settings}
+            setMessage={setMessage}
+          />
+        );
+      case 'settings':
+        return (
+          <Settings
+            settings={settings}
+            updateSettings={updateSettings}
+            testApiKey={testApiKey}
+            openGroqConsole={openGroqConsole}
+            testing={testing}
+            apiKeyValid={apiKeyValid}
+            showApiKey={showApiKey}
+            setShowApiKey={setShowApiKey}
+            dataDirectory={dataDirectory}
+            checkingUpdates={checkingUpdates}
+            updateStatus={updateStatus}
+            checkForUpdates={checkForUpdates}
+            openGitHubReleases={openGitHubReleases}
+          />
+        );
+      case 'changelog':
+        return (
+          <Changelog
+            openGitHubReleases={openGitHubReleases}
+          />
+        );
+      default:
+        return <div>Page not found</div>;
+    }
+  };
+
+  // Show onboarding if user doesn't have API key configured
+  if (showOnboarding && !loading) {
+    return (
+      <Onboarding
+        onComplete={handleOnboardingComplete}
+        onTestApiKey={handleOnboardingApiTest}
+        openGroqConsole={openGroqConsole}
+      />
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Scrollable Content Container with Rounded Background */}
-      <div className="h-screen overflow-y-auto force-scrollbar scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent no-drag">
-        <div className="p-6 max-w-7xl mx-auto no-drag">
-          {/* Background with rounded edges */}
-          <div className="bg-card/30 rounded-3xl p-6 space-y-6 backdrop-blur-sm border border-border/50 shadow-lg no-drag">
-            {/* Welcome Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <img 
-                  src={iconPath} 
-                  alt="VWisper Logo" 
-                  className="w-8 h-8 object-contain"
-                />
-                <div>
-                  <h1 className="text-2xl font-bold">VWisper Dashboard</h1>
-                  <p className="text-muted-foreground">
-                    Voice transcription analytics and settings
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                {isRecording && (
-                  <Badge variant="destructive" className="animate-pulse">
-                    <Mic className="w-3 h-3 mr-1" />
-                    Recording...
-                  </Badge>
-                )}
-                
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={openGitHub}
-                  className="h-8 w-8 p-0"
-                  title="Visit GitHub"
-                >
-                  <Github className="w-4 h-4" />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => handleQuickAction('refresh')}
-                  className="h-8 w-8 p-0"
-                  title="Refresh Data"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+    <SidebarProvider>
+      <div className="h-screen w-screen bg-background text-foreground flex overflow-hidden">
+        <Sidebar variant="sidebar" className="border-r flex-shrink-0">
+          <SidebarHeader className="border-b p-4">
+            <div className="flex items-center space-x-3">
+              <img src={iconPath} alt="VWisper" className="w-8 h-8" />
+              <span className="font-semibold text-lg">VWisper</span>
+            </div>
+          </SidebarHeader>
+          <SidebarContent className="p-4">
+            <SidebarGroup>
+              <SidebarGroupLabel className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Navigation
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="space-y-1">
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      isActive={activeTab === 'playground'}
+                      onClick={() => setActiveTab('playground')}
+                      className="w-full justify-start"
+                    >
+                      <Play className="w-4 h-4 mr-3" />
+                      <span>Playground</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      isActive={activeTab === 'analytics'}
+                      onClick={() => setActiveTab('analytics')}
+                      className="w-full justify-start"
+                    >
+                      <BarChart3 className="w-4 h-4 mr-3" />
+                      <span>Analytics</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      isActive={activeTab === 'history'}
+                      onClick={() => setActiveTab('history')}
+                      className="w-full justify-start"
+                    >
+                      <HistoryIcon className="w-4 h-4 mr-3" />
+                      <span>History</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      isActive={activeTab === 'settings'}
+                      onClick={() => setActiveTab('settings')}
+                      className="w-full justify-start"
+                    >
+                      <SettingsIcon className="w-4 h-4 mr-3" />
+                      <span>Settings</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      isActive={activeTab === 'changelog'}
+                      onClick={() => setActiveTab('changelog')}
+                      className="w-full justify-start"
+                    >
+                      <BookOpen className="w-4 h-4 mr-3" />
+                      <span>Changelog</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarFooter className="border-t p-4">
+            <div className="flex items-center justify-center">
+              <div className="flex space-x-1 bg-muted/30 rounded-lg p-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={cycleTheme}
                   className="h-8 w-8 p-0" 
                   title={`Current: ${theme === 'system' ? 'System' : theme === 'light' ? 'Light' : 'Dark'} - Click to change`}
@@ -459,20 +549,46 @@ const Dashboard: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={openChangelog}
+                  onClick={openGitHub}
                   className="h-8 w-8 p-0"
-                  title="View Changelog"
+                  title="Open GitHub Repository"
                 >
-                  <BookOpen className="w-4 h-4" />
+                  <Github className="w-4 h-4" />
                 </Button>
               </div>
             </div>
+          </SidebarFooter>
+        </Sidebar>
+        <SidebarInset className="flex flex-col overflow-hidden w-full flex-1">
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <SidebarTrigger className="-ml-1" />
+            <div className="flex-1">
+              <h1 className="text-xl font-semibold">
+                {activeTab === 'playground' && 'Text Playground'}
+                {activeTab === 'analytics' && 'Analytics & Overview'}
+                {activeTab === 'history' && 'Transcription History'}
+                {activeTab === 'settings' && 'Settings'}
+              </h1>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickAction('refresh')}
+                className="h-9 w-9 p-0"
+                title="Refresh Data"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </Button>
+            </div>
+          </header>
 
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto w-full">
             {/* Update Banner */}
             {updateStatus && updateStatus.type === 'update' && (
-              <Alert className="mt-4 border-blue-500 bg-blue-50 dark:bg-blue-950">
-                {/* Ensure content spans the correct grid column so text isn't squashed */}
-                <div className="flex items-center justify-between w-full col-start-2">
+              <Alert className="m-6 border-blue-500 bg-blue-50 dark:bg-blue-950">
+                <div className="flex items-center justify-between w-full">
                   <AlertDescription className="text-blue-700 dark:text-blue-400">
                     {updateStatus.message}
                   </AlertDescription>
@@ -480,7 +596,7 @@ const Dashboard: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={openGitHubReleases}
-                    className="h-7 px-2 text-xs"
+                    className="h-8 px-3 text-xs"
                   >
                     Download Update
                   </Button>
@@ -488,159 +604,34 @@ const Dashboard: React.FC = () => {
               </Alert>
             )}
 
+            {/* Success Message Banner */}
+            {message && message.type === 'success' && (
+              <Alert className="m-6 border-green-500 bg-green-50 dark:bg-green-950">
+                <AlertDescription className="text-green-700 dark:text-green-400">
+                  {message.text}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Error Message Banner */}
             {message && message.type === 'error' && (
-              <Alert className="mt-4 border-red-500 bg-red-50 dark:bg-red-950"> 
+              <Alert className="m-6 border-red-500 bg-red-50 dark:bg-red-950"> 
                 <AlertDescription className="text-red-700 dark:text-red-400">
                   {message.text}
                 </AlertDescription>
               </Alert>
             )}
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Recordings</CardTitle>
-                  <Mic className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats?.total_recordings || 0}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {stats?.successful_recordings || 0} successful
-                  </p>
-                  <Progress
-                    value={getSuccessRate()}
-                    className="mt-2"
-                  />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Duration</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {formatDuration(stats?.total_duration_ms || 0)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Recording time
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Characters Transcribed</CardTitle>
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {stats?.total_characters_transcribed?.toLocaleString() || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Total text generated
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{getSuccessRate().toFixed(1)}%</div>
-                  <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                    <CheckCircle className="w-3 h-3 text-green-500" />
-                    <span>{stats?.successful_recordings || 0} success</span>
-                    <XCircle className="w-3 h-3 text-red-500" />
-                    <span>{stats?.failed_recordings || 0} failed</span>
-                  </div>
-                </CardContent>
-              </Card>
+            {/* Main Content */}
+            <div className="p-6 w-full max-w-full overflow-x-hidden">
+              {renderContent()}
             </div>
-
-            {/* Analytics Tabs */}
-            <Tabs defaultValue="playground" value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="playground">Text Playground</TabsTrigger>
-                <TabsTrigger value="analytics">Analytics & Overview</TabsTrigger>
-                <TabsTrigger value="history">History</TabsTrigger>
-                <TabsTrigger value="settings">Settings</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="playground" className="space-y-4">
-                <Playground 
-                  isRecording={isRecording}
-                  liveTranscriptionText={liveTranscriptionText}
-                  setLiveTranscriptionText={setLiveTranscriptionText}
-                  settings={settings}
-                />
-              </TabsContent>
-
-              <TabsContent value="analytics" className="space-y-4">
-                <Analytics analytics={analytics} stats={stats} />
-              </TabsContent>
-
-              <TabsContent value="history" className="space-y-4">
-                <History 
-                  settings={settings}
-                  setMessage={setMessage}
-                />
-              </TabsContent>
-
-              <TabsContent value="settings" className="space-y-4">
-                <Settings
-                  settings={settings}
-                  updateSettings={updateSettings}
-                  testApiKey={testApiKey}
-                  openGroqConsole={openGroqConsole}
-                  testing={testing}
-                  apiKeyValid={apiKeyValid}
-                  showApiKey={showApiKey}
-                  setShowApiKey={setShowApiKey}
-                  dataDirectory={dataDirectory}
-                  checkingUpdates={checkingUpdates}
-                  updateStatus={updateStatus}
-                  checkForUpdates={checkForUpdates}
-                  openGitHubReleases={openGitHubReleases}
-                />
-              </TabsContent>
-            </Tabs>
-
-            {/* Changelog Dialog */}
-            <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
-              <DialogContent className="max-w-4xl w-[90vw] overflow-y-auto max-h-[80vh]">
-                <DialogHeader>
-                  <DialogTitle>Changelog</DialogTitle>
-                </DialogHeader>
-                <div className="prose dark:prose-invert max-w-none">
-                  <ReactMarkdown 
-                    components={{
-                      h1: ({children}) => <h1 className="text-2xl font-bold mb-4 text-foreground">{children}</h1>,
-                      h2: ({children}) => <h2 className="text-xl font-semibold mb-3 mt-6 text-foreground border-b border-border pb-2">{children}</h2>,
-                      h3: ({children}) => <h3 className="text-lg font-medium mb-2 mt-4 text-foreground">{children}</h3>,
-                      p: ({children}) => <p className="mb-3 text-foreground leading-relaxed">{children}</p>,
-                      ul: ({children}) => <ul className="list-disc pl-6 mb-4 space-y-1">{children}</ul>,
-                      li: ({children}) => <li className="text-foreground">{children}</li>,
-                      hr: () => <hr className="my-6 border-border" />,
-                      strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
-                      code: ({children}) => <code className="bg-muted px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
-                    }}
-                  >
-                    {changelogContent}
-                  </ReactMarkdown>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
-        </div>
+        </SidebarInset>
       </div>
-    </div>
-  );
+    </SidebarProvider>
+
+);
 };
 
 export default Dashboard;

@@ -2,6 +2,81 @@
 
 All notable changes to VWisper will be documented in this file.
 
+## [v1.0.4] - 7/9/2025
+**[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.4)**
+
+### All Platforms
+#### First-Time User Experience
+- **Added**: Complete onboarding flow for new users without API keys configured
+- **Added**: 5-step guided setup process with progress tracking and step indicators
+- **Added**: Welcome screen highlighting VWisper's key features (speed, shortcuts, auto-typing)
+- **Added**: Interactive "How VWisper Works" tutorial with step-by-step instructions
+- **Added**: Built-in API key setup with direct links to Groq Console
+- **Added**: Real-time API key testing and validation during onboarding
+- **Added**: Visual feedback for successful API key verification
+- **Added**: System-wide text field detection explanation for better user understanding
+
+#### macOS-Specific Enhancements
+- **Added**: Dedicated Mac accessibility permission step in onboarding flow
+- **Added**: Automatic platform detection to show Mac-specific instructions
+- **Added**: Real-time accessibility permission monitoring and status updates
+- **Added**: Clear instructions for granting accessibility permissions through System Preferences
+- **Added**: Automatic app restart after onboarding completion on macOS to apply accessibility permissions
+- **Added**: Mac-specific UI elements and messaging for FN key usage
+- **Fixed**: Accessibility permissions now properly take effect after onboarding restart
+
+#### User Interface Improvements
+- **Added**: Modern progress bar with percentage completion display
+- **Added**: Step-by-step navigation with Previous/Next buttons
+- **Added**: Visual step indicators showing current progress
+- **Added**: Responsive design that works across different screen sizes
+- **Added**: Professional onboarding cards with consistent spacing and typography
+- **Added**: Success banners and error handling for better user feedback
+- **Changed**: New users are automatically guided through setup instead of seeing empty dashboard
+- **Changed**: Existing users with API keys skip onboarding and go directly to dashboard
+
+---
+
+## [v1.0.3] - 7/9/2025
+**[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.3)**
+
+### All Platforms
+#### Major UI/UX Redesign
+- **Added**: Complete dashboard redesign with modern sidebar navigation using Shadcn UI components
+- **Added**: Responsive sidebar with smooth animations and improved visual hierarchy
+- **Added**: Full-width dashboard layout utilizing complete screen real estate
+- **Added**: Curved corners and improved spacing throughout the interface
+- **Added**: Loading states with skeleton components for better user feedback
+- **Fixed**: Layout overflow issues and horizontal scrollbars
+- **Fixed**: Content area now properly scales and uses available space
+- **Changed**: Replaced top navigation bar with collapsible sidebar navigation
+- **Changed**: Dashboard now uses modern card-based layout with consistent spacing
+
+#### Enhanced Analytics Dashboard
+- **Added**: Comprehensive time frame selector (Last 7 days, 30 days, 90 days, All time)
+- **Added**: Dynamic analytics that update based on selected time period
+- **Added**: New performance metrics including Words per Minute (WPM) and Characters per Minute (CPM)
+- **Added**: Realistic "Time Saved" calculation based on average typing speed (40 WPM)
+- **Added**: Quality score metrics for transcription accuracy assessment
+- **Added**: Improved word count analytics with better categorization
+- **Added**: Enhanced usage statistics with session-based insights
+- **Fixed**: Removed duplicate and redundant metric cards
+- **Fixed**: "Weekly Average" now displays as whole numbers for better readability
+- **Fixed**: All charts and statistics now properly filter by selected time frame
+- **Changed**: "Characters Transcribed" renamed to "Total Words" for clarity
+- **Changed**: Grouped related metrics together for better organization
+- **Changed**: Analytics overview moved exclusively to Analytics page (removed from other sections)
+
+#### Technical Improvements
+- **Added**: Proper responsive grid layouts that adapt to screen size
+- **Added**: Consistent card design system across all dashboard components
+- **Added**: Improved component organization and code structure
+- **Fixed**: Scroll behavior and container overflow issues
+- **Fixed**: Layout responsiveness across different screen sizes
+- **Changed**: Enhanced component architecture for better maintainability
+
+---
+
 ## [v1.0.2] - 7/8/2025
 **[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.2)**
 
