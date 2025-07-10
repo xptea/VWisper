@@ -4,7 +4,8 @@
 # which some users have reported appears corrupted when downloaded from GitHub.
 #
 # Usage:
-#   ./scripts/create_dmg.sh [APP_PATH] [DMG_NAME]
+# chmod +x scripts/create_dmg.sh       
+# ./scripts/create_dmg.sh#
 #
 # If APP_PATH is not provided, it defaults to
 #   target/release/bundle/macos/VWisper.app
