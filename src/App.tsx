@@ -45,42 +45,62 @@ function App() {
    * ------------------------------------------------------------------ */
   // Setup event listeners for backend communication
   useEffect(() => {
+    let unlisteners: (() => void)[] = [];
+
     const setupListeners = async () => {
       // Listen for recording events from backend
-      await listen("recording-started", () => {
+      const unlisten1 = await listen("recording-started", () => {
         setUiState(UIState.Recording);
       });
 
-      await listen("recording-stopped", () => {
+      const unlisten2 = await listen("recording-stopped", () => {
         setUiState(UIState.Loading);
       });
 
-      await listen("transcription-completed", (event) => {
+      const unlisten3 = await listen("transcription-completed", (event) => {
         const text = event.payload as string;
         console.log("Transcription completed:", text);
         setUiState(UIState.Success);
         // The text will be injected by the backend (Enigo)
       });
 
-      await listen("transcription-error", (event) => {
+      const unlisten4 = await listen("transcription-error", (event) => {
         const error = event.payload as string;
         console.error("Transcription error:", error);
         setUiState(UIState.Error);
       });
 
-      await listen("wave-reset", () => {
+      const unlisten5 = await listen("wave-reset", () => {
         setIconsExiting(false); 
         setUiState(UIState.Recording);
       });
 
-      // Listen for sound events from backend
-      await listen("play-sound", (event) => {
+      // Listen for sound events from backend - add debouncing to prevent multiple plays
+      let lastSoundTime = 0;
+      const SOUND_DEBOUNCE_MS = 100; // Prevent same sound playing within 100ms
+      
+      const unlisten6 = await listen("play-sound", (event) => {
         const soundName = event.payload as string;
-        playSound(soundName);
+        const now = Date.now();
+        
+        // Debounce sound playing to prevent duplicates in dev mode
+        if (now - lastSoundTime >= SOUND_DEBOUNCE_MS) {
+          lastSoundTime = now;
+          playSound(soundName);
+        } else {
+          console.log(`Debounced duplicate ${soundName} sound`);
+        }
       });
+
+      unlisteners = [unlisten1, unlisten2, unlisten3, unlisten4, unlisten5, unlisten6];
     };
 
     setupListeners();
+
+    // Cleanup listeners on unmount to prevent duplicates
+    return () => {
+      unlisteners.forEach(unlisten => unlisten());
+    };
   }, []);
 
   // Animate bars while recording; stop and reset heights otherwise
@@ -144,24 +164,43 @@ function App() {
   /* ------------------------------------------------------------------
    * Sound Functions
    * ------------------------------------------------------------------ */
+  let currentAudio: HTMLAudioElement | null = null; // Track current playing audio
+
   const playSound = (soundName: string) => {
     try {
+      // Stop any currently playing sound to prevent overlapping
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+      }
+
       // Use public folder path for Vite
       const soundPath = `/sounds/${soundName}.wav`;
       
       const audio = new Audio(soundPath);
       audio.volume = 0.6;
+      currentAudio = audio;
       
       audio.onerror = (error) => {
         console.error(`Failed to load ${soundName} sound:`, error);
+        currentAudio = null;
+      };
+      
+      audio.onended = () => {
+        currentAudio = null;
       };
       
       audio.play().catch((error) => {
         console.error(`Failed to play ${soundName} sound:`, error);
+        currentAudio = null;
       });
+      
+      console.log(`Playing ${soundName} sound`);
       
     } catch (error) {
       console.error(`Error with ${soundName} sound:`, error);
+      currentAudio = null;
     }
   };
 
@@ -216,7 +255,13 @@ function App() {
         className={`bg-black rounded-full flex items-center justify-center transition-all duration-300 relative overflow-hidden ${
           isPillExpanded ? "px-3" : "px-4"
         } py-2`}
-        style={{ minWidth: isPillExpanded ? 130 : 110, minHeight: 28, maxWidth: 160 }}
+        style={{ 
+          minWidth: isPillExpanded ? 130 : 110, 
+          minHeight: 28, 
+          maxWidth: 160,
+          // Add extra margin on macOS to ensure no cutoff - increased margin
+          margin: '0 20px'
+        }}
       >
         {/* Left Icon */}
         <div

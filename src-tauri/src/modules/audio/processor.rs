@@ -282,7 +282,17 @@ fn handle_successful_transcription(app_handle: tauri::AppHandle, text: String) {
         // Tell the front-end to collapse the pill back to its compact state
         let _ = window.emit("wave-reset", ());
 
-        // Resize to compact, wait for front-end collapse, then hide
+        // Wait for frontend animation to complete before resizing window
+        #[cfg(target_os = "macos")]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(350)); // Wait for CSS animation on macOS
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(300)); // Wait for CSS animation on other platforms
+        }
+
+        // Now resize to compact after animation completes
         if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
             error!("Failed to reset window size: {}", e);
         }
@@ -323,6 +333,8 @@ fn handle_successful_transcription(app_handle: tauri::AppHandle, text: String) {
             // Emit event for frontend to play ending sound
             if let Err(e) = app_handle.emit("play-sound", "ending") {
                 error!("Failed to emit play-sound event for ending: {}", e);
+            } else {
+                debug!("Emitted play-sound event for ending sound");
             }
         }
     }
@@ -337,7 +349,17 @@ fn handle_empty_transcription(app_handle: &tauri::AppHandle) {
         // Tell the front-end to collapse the pill back to its compact state
         let _ = window.emit("wave-reset", ());
 
-        // Resize to compact, wait for front-end collapse, then hide
+        // Wait for frontend animation to complete before resizing window
+        #[cfg(target_os = "macos")]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(350)); // Wait for CSS animation on macOS
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(300)); // Wait for CSS animation on other platforms
+        }
+
+        // Now resize to compact after animation completes
         if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
             error!("Failed to reset window size: {}", e);
         }
@@ -366,7 +388,17 @@ fn handle_transcription_error(app_handle: &tauri::AppHandle) {
         // Tell the front-end to collapse the pill back to its compact state
         let _ = window.emit("wave-reset", ());
 
-        // Resize to compact, wait for front-end collapse, then hide
+        // Wait for frontend animation to complete before resizing window
+        #[cfg(target_os = "macos")]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(350)); // Wait for CSS animation on macOS
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(300)); // Wait for CSS animation on other platforms
+        }
+
+        // Now resize to compact after animation completes
         if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
             error!("Failed to reset window size: {}", e);
         }
@@ -400,7 +432,17 @@ fn handle_cancellation(app_handle: &tauri::AppHandle) {
         // Tell the front-end to collapse the pill back to its compact state
         let _ = window.emit("wave-reset", ());
 
-        // Resize to compact, wait for front-end collapse, then hide
+        // Wait for frontend animation to complete before resizing window
+        #[cfg(target_os = "macos")]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(350)); // Wait for CSS animation on macOS
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(300)); // Wait for CSS animation on other platforms
+        }
+
+        // Now resize to compact after animation completes
         if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
             error!("Failed to reset window size: {}", e);
         }
@@ -433,7 +475,17 @@ fn handle_insufficient_audio(app_handle: &tauri::AppHandle) {
         // Tell the front-end to collapse the pill back to its compact state
         let _ = window.emit("wave-reset", ());
 
-        // Resize to compact, wait for front-end collapse, then hide
+        // Wait for frontend animation to complete before resizing window
+        #[cfg(target_os = "macos")]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(350)); // Wait for CSS animation on macOS
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(300)); // Wait for CSS animation on other platforms
+        }
+
+        // Now resize to compact after animation completes
         if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
             error!("Failed to reset window size: {}", e);
         }
@@ -468,7 +520,17 @@ fn handle_no_audio(app_handle: &tauri::AppHandle) {
         // Tell the front-end to collapse the pill back to its compact state
         let _ = window.emit("wave-reset", ());
 
-        // Resize to compact, wait for front-end collapse, then hide
+        // Wait for frontend animation to complete before resizing window
+        #[cfg(target_os = "macos")]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(350)); // Wait for CSS animation on macOS
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(300)); // Wait for CSS animation on other platforms
+        }
+
+        // Now resize to compact after animation completes
         if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: WAVE_WIDTH_COMPACT as u32, height: WAVE_HEIGHT as u32 })) {
             error!("Failed to reset window size: {}", e);
         }

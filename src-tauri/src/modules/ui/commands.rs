@@ -320,6 +320,11 @@ pub fn start_recording(app: tauri::AppHandle) -> Result<(), String> {
     // Emit event for frontend to play start sound
     if let Err(e) = app.emit("play-sound", "start") {
         error!("Failed to emit play-sound event for start: {}", e);
+    } else {
+        #[cfg(debug_assertions)]
+        debug!("Emitted play-sound event for start sound (debug mode)");
+        #[cfg(not(debug_assertions))]
+        debug!("Emitted play-sound event for start sound");
     }
     
     // Emit event to frontend about recording state
