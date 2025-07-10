@@ -2,8 +2,8 @@
 
 All notable changes to VWisper will be documented in this file.
 
-## [v1.0.4] - 7/9/2025
-**[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.4)**
+## [v1.0.3] - 7/9/2025
+**[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.3)**
 
 ### All Platforms
 #### First-Time User Experience
@@ -22,35 +22,27 @@ All notable changes to VWisper will be documented in this file.
 - **Added**: Real-time accessibility permission monitoring and status updates
 - **Added**: Clear instructions for granting accessibility permissions through System Preferences
 - **Added**: Automatic app restart after onboarding completion on macOS to apply accessibility permissions
-- **Added**: Mac-specific UI elements and messaging for FN key usage
+- **Added**: Mac-specific UI elements and messaging for control key usage
 - **Fixed**: Accessibility permissions now properly take effect after onboarding restart
 
-#### User Interface Improvements
-- **Added**: Modern progress bar with percentage completion display
-- **Added**: Step-by-step navigation with Previous/Next buttons
-- **Added**: Visual step indicators showing current progress
-- **Added**: Responsive design that works across different screen sizes
-- **Added**: Professional onboarding cards with consistent spacing and typography
-- **Added**: Success banners and error handling for better user feedback
-- **Changed**: New users are automatically guided through setup instead of seeing empty dashboard
-- **Changed**: Existing users with API keys skip onboarding and go directly to dashboard
-
----
-
-## [v1.0.3] - 7/9/2025
-**[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.3)**
-
-### All Platforms
 #### Major UI/UX Redesign
 - **Added**: Complete dashboard redesign with modern sidebar navigation using Shadcn UI components
 - **Added**: Responsive sidebar with smooth animations and improved visual hierarchy
 - **Added**: Full-width dashboard layout utilizing complete screen real estate
 - **Added**: Curved corners and improved spacing throughout the interface
 - **Added**: Loading states with skeleton components for better user feedback
+- **Added**: Modern progress bar with percentage completion display
+- **Added**: Step-by-step navigation with Previous/Next buttons
+- **Added**: Visual step indicators showing current progress
+- **Added**: Responsive design that works across different screen sizes
+- **Added**: Professional onboarding cards with consistent spacing and typography
+- **Added**: Success banners and error handling for better user feedback
 - **Fixed**: Layout overflow issues and horizontal scrollbars
 - **Fixed**: Content area now properly scales and uses available space
 - **Changed**: Replaced top navigation bar with collapsible sidebar navigation
 - **Changed**: Dashboard now uses modern card-based layout with consistent spacing
+- **Changed**: New users are automatically guided through setup instead of seeing empty dashboard
+- **Changed**: Existing users with API keys skip onboarding and go directly to dashboard
 
 #### Enhanced Analytics Dashboard
 - **Added**: Comprehensive time frame selector (Last 7 days, 30 days, 90 days, All time)
@@ -81,8 +73,8 @@ All notable changes to VWisper will be documented in this file.
 **[📥 Download Release](https://github.com/xptea/VWisper/releases/tag/1.0.2)**
 
 ### macOS
-- **Added**: Fn key global hotkey monitoring using rdev crate for native macOS key detection
-- **Added**: Automatic fallback to FN key if Control key detection fails
+- **Added**: control key global hotkey monitoring using rdev crate for native macOS key detection
+- **Added**: Automatic fallback to control key if Control key detection fails
 - **Added**: Dynamic taskbar detection and positioning - wave window automatically adjusts based on Dock visibility
 - **Added**: Percentage-based positioning (8% from bottom) for better adaptability across different screen sizes
 - **Added**: Smart Dock detection using macOS system preferences
@@ -192,7 +184,7 @@ All notable changes to VWisper will be documented in this file.
 - History of transcription sessions
 - Text playground for testing
 - Groq API integration
-- Global hotkey support (Right CTRL key on Windows & Linux and the FN key on Mac)
+- Global hotkey support (Right CTRL key on Windows & Linux and the control key on Mac)
 - System tray integration
 - Cross-platform support (Windows, macOS, Linux)
 

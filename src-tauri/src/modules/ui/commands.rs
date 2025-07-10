@@ -809,7 +809,7 @@ pub fn read_version_file() -> Result<String, String> {
     
     // If neither file exists, return a default version
     warn!("Could not find version.txt file, using default version");
-    Ok("1.0.2".to_string())
+    Ok("1.0.3".to_string())
 }
 
 
@@ -962,4 +962,78 @@ fn compare_versions(version1: &str, version2: &str) -> i32 {
     }
     
     0
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn check_accessibility_permission() -> Result<bool, String> {
+    use std::os::raw::c_void;
+    
+    unsafe {
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+        }
+        Ok(AXIsProcessTrusted())
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn request_accessibility_permission() -> Result<(), String> {
+    use core_foundation::{boolean::{kCFBooleanTrue, CFBoolean}, dictionary::CFDictionary, string::{CFString, CFStringRef}, base::TCFType};
+    use std::os::raw::c_void;
+
+    unsafe {
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+            fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
+            static kAXTrustedCheckOptionPrompt: CFStringRef;
+        }
+
+        if AXIsProcessTrusted() {
+            return Ok(());
+        }
+
+        // Build { kAXTrustedCheckOptionPrompt: true } dictionary to trigger prompt.
+        let key = CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt);
+        let value = CFBoolean::wrap_under_get_rule(kCFBooleanTrue);
+        let dict: CFDictionary<CFString, CFBoolean> = CFDictionary::from_CFType_pairs(&[(key.clone(), value.clone())]);
+        // This call will show the system dialog asking the user to grant Accessibility access.
+        let _ = AXIsProcessTrustedWithOptions(dict.as_concrete_TypeRef() as *const c_void);
+        
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn check_accessibility_permission() -> Result<bool, String> {
+    // On non-macOS platforms, always return true as no special permission is needed
+    Ok(true)
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn request_accessibility_permission() -> Result<(), String> {
+    // On non-macOS platforms, this is a no-op
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_platform() -> Result<String, String> {
+    Ok(std::env::consts::OS.to_string())
+}
+
+#[tauri::command]
+pub fn restart_app() -> Result<(), String> {
+    std::process::Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    
+    std::process::exit(0);
+}
+
+#[tauri::command]
+pub fn close_app() -> Result<(), String> {
+    std::process::exit(0);
 }

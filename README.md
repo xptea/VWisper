@@ -5,7 +5,7 @@ A cross-platform Tauri application with global key monitoring capabilities.
 ## Features
 
 - Cross-platform support (macOS, Linux, Windows)
-- Global key monitoring using Right CTRL key on Windows & Linux and the FN key on Mac
+- Global key monitoring using Right CTRL key on Windows & Linux and the control key on Mac
 - Modular Rust codebase
 - Wave window management
 
@@ -88,8 +88,8 @@ Pre-built packages for major distributions will be provided in a future release.
 ## Usage
 
 1. Start the application
-2. Hold the Right CTRL key on Windows & Linux and the FN key on Mac anywhere on your system to show the wave window
-3. Release the Right CTRL key on Windows & Linux and the FN key on Mac to hide the wave window
+2. Hold the Right CTRL key on Windows & Linux and the control key on Mac anywhere on your system to show the wave window
+3. Release the Right CTRL key on Windows & Linux and the control key on Mac to hide the wave window
 
 ## Platform Support
 

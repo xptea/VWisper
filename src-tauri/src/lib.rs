@@ -51,6 +51,11 @@ use modules::{
             test_text_injection,
             test_simple_text_injection,
             check_for_updates,
+            check_accessibility_permission,
+            request_accessibility_permission,
+            get_platform,
+            restart_app,
+            close_app,
         },
         history_commands::{
             get_transcription_history,
@@ -71,32 +76,6 @@ fn init_x11_threads() {
     unsafe {
         use x11::xlib::XInitThreads;
         XInitThreads();
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn ensure_accessibility_permission() {
-    use core_foundation::{boolean::{kCFBooleanTrue, CFBoolean}, dictionary::CFDictionary, string::{CFString, CFStringRef}, base::TCFType};
-    use std::os::raw::c_void;
-
-    unsafe {
-        // Check if we are already trusted; if so, nothing to do.
-        extern "C" {
-            fn AXIsProcessTrusted() -> bool;
-            fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
-            static kAXTrustedCheckOptionPrompt: CFStringRef;
-        }
-
-        if AXIsProcessTrusted() {
-            return;
-        }
-
-        // Build { kAXTrustedCheckOptionPrompt: true } dictionary to trigger prompt.
-        let key = CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt);
-        let value = CFBoolean::wrap_under_get_rule(kCFBooleanTrue);
-        let dict: CFDictionary<CFString, CFBoolean> = CFDictionary::from_CFType_pairs(&[(key.clone(), value.clone())]);
-        // This call will show the system dialog asking the user to grant Accessibility access.
-        let _ = AXIsProcessTrustedWithOptions(dict.as_concrete_TypeRef() as *const c_void);
     }
 }
 
@@ -129,10 +108,6 @@ pub fn run() {
             INIT.call_once(|| {
                 info!("Setting up application");
                 
-                // macOS: ensure Accessibility permission prompt shows once if needed
-                #[cfg(target_os = "macos")]
-                ensure_accessibility_permission();
-
                 // Load configuration and decide which initial window to show
                 let _config = AppConfig::load();
                 
@@ -243,6 +218,11 @@ pub fn run() {
             test_text_injection,
             test_simple_text_injection,
             check_for_updates,
+            check_accessibility_permission,
+            request_accessibility_permission,
+            get_platform,
+            restart_app,
+            close_app,
         ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,7 +39,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
   const [isMac, setIsMac] = useState(false);
   const [accessibilityGranted, setAccessibilityGranted] = useState(false);
 
-  const steps = [
+  const steps = useMemo(() => [
     {
       id: 'welcome',
       title: 'Welcome to VWisper',
@@ -70,7 +70,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
       title: 'You\'re All Set!',
       description: 'Start using VWisper'
     }
-  ];
+  ], [isMac]);
 
   const handleTestApiKey = async () => {
     if (!apiKey.trim()) {
@@ -120,12 +120,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
   };
 
   const canProceed = () => {
-    switch (currentStep) {
-      case 2: // API setup step
+    const currentStepId = steps[currentStep]?.id;
+    
+    switch (currentStepId) {
+      case 'api-setup': // API setup step
         return apiKey.trim().length > 0;
-      case 3: // Test setup step
+      case 'test-setup': // Test setup step
         return testResult === true;
-      case (isMac ? 4 : -1): // Mac permissions step (only exists on Mac)
+      case 'mac-permissions': // Mac permissions step (only exists on Mac)
         return accessibilityGranted;
       default:
         return true;
@@ -133,8 +135,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
   };
 
   const renderStepContent = () => {
-    switch (currentStep) {
-      case 0: // Welcome
+    const currentStepId = steps[currentStep]?.id;
+    
+    switch (currentStepId) {
+      case 'welcome': // Welcome
         return (
           <div className="text-center space-y-6">
             <div className="flex justify-center mb-6">
@@ -159,7 +163,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
                 <Key className="w-8 h-8 text-primary" />
                 <h3 className="font-semibold">Simple Shortcut</h3>
                 <p className="text-sm text-muted-foreground text-center">
-                  Just hold Right CTRL (or FN on Mac) to record
+                  Just hold Right CTRL (or control on Mac) to record
                 </p>
               </div>
               <div className="flex flex-col items-center space-y-2 p-4 bg-muted/30 rounded-lg">
@@ -173,7 +177,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
           </div>
         );
 
-      case 1: // How it works
+      case 'how-it-works': // How it works
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -203,7 +207,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
                 <div>
                   <h3 className="font-semibold text-lg">Hold the Shortcut Key</h3>
                   <p className="text-muted-foreground">
-                    Press and hold <Badge variant="outline" className="mx-1">Right CTRL</Badge> on Windows/Linux or <Badge variant="outline" className="mx-1">FN</Badge> on Mac
+                    Press and hold <Badge variant="outline" className="mx-1">Right CTRL</Badge> on Windows/Linux or <Badge variant="outline" className="mx-1">control</Badge> on Mac
                   </p>
                 </div>
               </div>
@@ -242,7 +246,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
           </div>
         );
 
-      case 2: // API Setup
+      case 'api-setup': // API Setup
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -312,7 +316,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
           </div>
         );
 
-      case 3: // Test Setup
+      case 'test-setup': // Test Setup
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -360,21 +364,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
                 </div>
 
                 {testResult !== null && (
-                  <Alert className={testResult ? 'border-green-500 bg-green-50 dark:bg-green-950' : 'border-red-500 bg-red-50 dark:bg-red-950'}>
-                    <div className="flex items-center space-x-2">
-                      {testResult ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
-                      )}
-                      <AlertDescription className={testResult ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}>
-                        {testResult 
-                          ? 'Perfect! Your API key is working correctly.' 
-                          : 'API key test failed. Please check your key and try again.'
-                        }
-                      </AlertDescription>
-                    </div>
-                  </Alert>
+                  <div className={`flex items-center space-x-2 ${testResult ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {testResult ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : (
+                      <XCircle className="w-4 h-4" />
+                    )}
+                    <span className="text-sm font-medium">
+                      {testResult 
+                        ? 'Perfect! Your API key is working correctly.' 
+                        : 'API key test failed. Please check your key and try again.'
+                      }
+                    </span>
+                  </div>
                 )}
 
                 {!testResult && testResult !== null && (
@@ -393,8 +395,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
           </div>
         );
 
-      case 4: // Mac Permissions (only on Mac)
-        return isMac ? (
+      case 'mac-permissions': // Mac Permissions (only on Mac)
+        return (
           <div className="space-y-6">
             <div className="text-center">
               <h2 className="text-2xl font-bold text-foreground mb-4">Mac Accessibility Permission</h2>
@@ -431,14 +433,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
                 </div>
 
                 {accessibilityGranted ? (
-                  <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
-                      <AlertDescription className="text-green-800 dark:text-green-200">
-                        Perfect! Accessibility permission has been granted.
-                      </AlertDescription>
-                    </div>
-                  </Alert>
+                  <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="text-sm font-medium">
+                      Perfect! Accessibility permission has been granted.
+                    </span>
+                  </div>
                 ) : (
                   <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
                     <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">🔐 How to grant accessibility permission:</h4>
@@ -460,9 +460,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
               </CardContent>
             </Card>
           </div>
-        ) : null;
+        );
 
-      case (isMac ? 5 : 4): // Ready
+      case 'ready': // Ready
         return (
           <div className="text-center space-y-6">
             <div className="flex justify-center mb-6">
@@ -486,7 +486,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
               <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">Quick Reminder:</h3>
               <div className="text-blue-800 dark:text-blue-200 text-sm space-y-2 text-left">
                 <p>1. Focus on any text field in any application</p>
-                <p>2. Hold <Badge variant="outline" className="mx-1">Right CTRL</Badge> (or <Badge variant="outline" className="mx-1">FN</Badge> on Mac)</p>
+                <p>2. Hold <Badge variant="outline" className="mx-1">Right CTRL</Badge> (or <Badge variant="outline" className="mx-1">control</Badge> on Mac)</p>
                 <p>3. Speak naturally</p>
                 <p>4. Release the key and watch your words appear!</p>
               </div>
@@ -524,7 +524,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
 
   // Check accessibility permission periodically when on Mac permissions step
   useEffect(() => {
-    if (isMac && currentStep === 4) { // Mac permissions step
+    const currentStepId = steps[currentStep]?.id;
+    if (isMac && currentStepId === 'mac-permissions') { // Mac permissions step
       const checkPermission = async () => {
         await checkAccessibilityPermission();
       };
@@ -537,7 +538,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, onTestApiKey, openG
       
       return () => clearInterval(interval);
     }
-  }, [isMac, currentStep]);
+  }, [isMac, currentStep, steps]);
 
   const checkAccessibilityPermission = async () => {
     try {

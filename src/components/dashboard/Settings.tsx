@@ -148,7 +148,7 @@ const Settings: React.FC<SettingsProps> = ({
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between opacity-50">
               <div className="space-y-0.5">
-                <Label className="text-muted-foreground">Global Shortcut (Right CTRL key on Windows & Linux and the FN key on Mac)</Label>
+                <Label className="text-muted-foreground">Global Shortcut (Right CTRL key on Windows & Linux and the control key on Mac)</Label>
                 <p className="text-sm text-muted-foreground">
                   Enable global keyboard shortcut for recording
                 </p>
@@ -243,7 +243,7 @@ const Settings: React.FC<SettingsProps> = ({
             <Separator />              <div className="space-y-2">
                 <h4 className="text-sm font-medium">Application Version</h4>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">VWisper v1.0.2</p>
+                  <p className="text-sm text-muted-foreground">VWisper v1.0.3</p>
                   <Button
                     variant="outline"
                     size="sm"
@@ -286,8 +286,8 @@ const Settings: React.FC<SettingsProps> = ({
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>• Open any text editor or document where you want text</li>
                 <li>• Click to position your cursor in the text area</li>
-                <li>• Hold Right CTRL key on Windows & Linux and the FN key on Mac to start recording</li>
-                <li>• Release Right CTRL key on Windows & Linux and the FN key on Mac to stop and transcribe</li>
+                <li>• Hold Right CTRL key on Windows & Linux and the control key on Mac to start recording</li>
+                <li>• Release Right CTRL key on Windows & Linux and the control key on Mac to stop and transcribe</li>
                 <li>• Text will be automatically typed at cursor</li>
                 <li>• Configure API key for transcription to work</li>
               </ul>
