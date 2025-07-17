@@ -340,7 +340,6 @@ fn handle_successful_transcription(app_handle: tauri::AppHandle, text: String) {
     }
     
     // Reset window counter
-    crate::modules::ui::commands::reset_wave_window_counter_internal();
 }
 
 fn handle_empty_transcription(app_handle: &tauri::AppHandle) {
@@ -379,7 +378,6 @@ fn handle_empty_transcription(app_handle: &tauri::AppHandle) {
     }
     
     // Reset window counter
-    crate::modules::ui::commands::reset_wave_window_counter_internal();
 }
 
 fn handle_transcription_error(app_handle: &tauri::AppHandle) {
@@ -418,7 +416,6 @@ fn handle_transcription_error(app_handle: &tauri::AppHandle) {
     }
     
     // Reset window counter
-    crate::modules::ui::commands::reset_wave_window_counter_internal();
 }
 
 fn handle_cancellation(app_handle: &tauri::AppHandle) {
@@ -462,7 +459,6 @@ fn handle_cancellation(app_handle: &tauri::AppHandle) {
     }
 
     // Reset internal counter so the next session starts cleanly
-    crate::modules::ui::commands::reset_wave_window_counter_internal();
 }
 
 fn handle_insufficient_audio(app_handle: &tauri::AppHandle) {
@@ -504,7 +500,7 @@ fn handle_insufficient_audio(app_handle: &tauri::AppHandle) {
         }
     }
 
-    crate::modules::ui::commands::reset_wave_window_counter_internal();
+    // crate::modules::ui::commands::reset_wave_window_counter_internal();
 }
 
 fn handle_no_audio(app_handle: &tauri::AppHandle) {
@@ -549,7 +545,7 @@ fn handle_no_audio(app_handle: &tauri::AppHandle) {
         }
     }
 
-    crate::modules::ui::commands::reset_wave_window_counter_internal();
+    // crate::modules::ui::commands::reset_wave_window_counter_internal();
 }
 
 fn transcribe_with_groq(audio_mono: &[f32], src_rate: u32) -> Result<String, Box<dyn std::error::Error>> {
@@ -622,7 +618,7 @@ fn transcribe_with_groq(audio_mono: &[f32], src_rate: u32) -> Result<String, Box
     Ok(resp.text()?)
 }
 
-/// Record a transcription session for analytics
+/// Record a transcription session for analytics and history
 fn record_session(
     audio_duration_ms: u64,
     processing_duration_ms: u64,
@@ -649,6 +645,25 @@ fn record_session(
     // Update analytics
     let mut analytics = AnalyticsData::load();
     analytics.update_with_recording(audio_duration_ms, transcription.len());
+
+    // Save to history
+    use crate::modules::storage::history::{TranscriptionHistory, TranscriptionEntry};
+    let mut history = TranscriptionHistory::load();
+    let entry = TranscriptionEntry {
+        id: session.id.clone(),
+        timestamp: session.timestamp,
+        transcribed_text: session.transcribed_text.clone(),
+        duration_ms: session.audio_length_ms,
+        success: session.success,
+        processing_time_ms: session.processing_time_ms,
+        character_count: session.transcription_length,
+        word_count: crate::modules::storage::history::estimate_word_count(&session.transcribed_text),
+    };
+    history.add_entry(entry);
+    
+    if let Err(e) = history.save() {
+        error!("Failed to save transcription history: {}", e);
+    }
 
     info!("Recorded session: {} chars, {}ms duration, success: {}", 
         transcription.len(), audio_duration_ms, success);

@@ -23,7 +23,7 @@ const AppRouter: React.FC = () => {
   // Route to appropriate component based on window label
   if (currentWindow === "dashboard") {
     console.log("Rendering dashboard component");
-    return <Dashboard />;
+  return <Dashboard />;
   } else if (currentWindow === "wave-window" || currentWindow === "main") {
     console.log("Rendering wave window component");
     return <App />;

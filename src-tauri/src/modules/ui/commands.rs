@@ -270,38 +270,6 @@ pub fn get_current_groq_api_key() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub fn debug_wave_windows(app: tauri::AppHandle) -> Result<String, String> {
-    let windows = app.webview_windows();
-    let wave_windows: Vec<_> = windows.values().filter(|w| w.label() == "wave-window").collect();
-    
-    let info = format!(
-        "Total windows: {}, Wave windows: {}",
-        windows.len(),
-        wave_windows.len()
-    );
-    
-    info!("{}", info);
-    
-    for (i, window) in wave_windows.iter().enumerate() {
-        let is_visible = window.is_visible().unwrap_or(false);
-        let is_minimized = window.is_minimized().unwrap_or(false);
-        info!("Wave window {}: visible={}, minimized={}", i, is_visible, is_minimized);
-    }
-    
-    Ok(info)
-}
-
-#[tauri::command]
-pub fn reset_wave_window_counter() -> Result<String, String> {
-    info!("Reset wave window counter");
-    Ok("Wave window counter reset".to_string())
-}
-
-pub fn reset_wave_window_counter_internal() {
-    info!("Reset wave window counter");
-}
-
-#[tauri::command]
 pub fn start_recording(app: tauri::AppHandle) -> Result<(), String> {
     info!("Starting recording command called");
     
@@ -459,9 +427,6 @@ pub fn cancel_processing(app: tauri::AppHandle) -> Result<(), String> {
         let _ = window.hide();
     }
 
-    // Reset the internal window counter so the next invocation works as expected
-    reset_wave_window_counter_internal();
-
     Ok(())
 }
 
@@ -578,17 +543,30 @@ pub fn load_settings() -> Result<crate::modules::settings::AppConfig, String> {
 #[derive(serde::Deserialize)]
 pub struct SettingsPayload {
     pub groq_api_key: Option<String>,
-    pub shortcut_enabled: bool,
-    pub auto_start: bool,
+    pub shortcut_enabled: Option<bool>,
+    pub auto_start: Option<bool>,
+    pub save_history: Option<bool>,
+    pub has_seen_splash: Option<bool>,
 }
 
-/// Persist updated application settings to disk.
 #[tauri::command]
 pub fn save_settings(settings: SettingsPayload) -> Result<(), String> {
     let mut cfg = crate::modules::settings::AppConfig::load();
-    cfg.groq_api_key = settings.groq_api_key;
-    cfg.shortcut_enabled = settings.shortcut_enabled;
-    cfg.auto_start = settings.auto_start;
+    if let Some(api_key) = settings.groq_api_key {
+        cfg.groq_api_key = Some(api_key);
+    }
+    if let Some(shortcut_enabled) = settings.shortcut_enabled {
+        cfg.shortcut_enabled = shortcut_enabled;
+    }
+    if let Some(auto_start) = settings.auto_start {
+        cfg.auto_start = auto_start;
+    }
+    if let Some(save_history) = settings.save_history {
+        cfg.save_history = save_history;
+    }
+    if let Some(has_seen_splash) = settings.has_seen_splash {
+        cfg.has_seen_splash = has_seen_splash;
+    }
     cfg.save().map_err(|e| e.to_string())
 }
 
@@ -608,66 +586,6 @@ pub fn test_groq_api_key(api_key: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn close_splashscreen_window(app: tauri::AppHandle) -> Result<(), String> {
-    info!("=== Closing splashscreen window ===");
-    
-    if let Some(window) = app.get_webview_window("splashscreen") {
-        info!("Found splashscreen window, closing it");
-        window.close().map_err(|e| {
-            error!("Failed to close splashscreen window: {}", e);
-            e.to_string()
-        })?;
-        info!("Splashscreen window closed successfully");
-    } else {
-        warn!("No splashscreen window found to close");
-    }
-    
-    // List remaining windows
-    let windows: Vec<String> = app.webview_windows().keys().map(|k| k.clone()).collect();
-    info!("Remaining windows after splash close: {:?}", windows);
-    
-    Ok(())
-}
-
-#[tauri::command]
-pub fn debug_windows(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let windows: Vec<String> = app.webview_windows()
-        .keys()
-        .map(|k| k.clone())
-        .collect();
-    
-    info!("Available windows: {:?}", windows);
-    Ok(windows)
-}
-
-#[tauri::command]
-pub fn transform_splash_to_dashboard(app: tauri::AppHandle) -> Result<(), String> {
-    info!("=== Transforming splashscreen to separate dashboard window ===");
-
-    // 1. Close splash window (if any) and show/create dashboard
-    if let Some(window) = app.get_webview_window("splashscreen") {
-        info!("Closing splashscreen window after dashboard is ready");
-        let _ = window.close();
-    }
-
-    if let Err(e) = show_dashboard_window(app.clone()) {
-        error!("Failed to create/show dashboard window: {}", e);
-        return Err(e);
-    }
-
-    // 3. Persist that the splash was shown so we skip it next launch
-    {
-        let mut cfg = crate::modules::settings::AppConfig::load();
-        if !cfg.has_seen_splash {
-            cfg.has_seen_splash = true;
-            let _ = cfg.save();
-        }
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
 pub fn get_usage_stats() -> Result<UsageStats, String> {
     let stats = UsageStats::load();
     Ok(stats)
@@ -677,6 +595,51 @@ pub fn get_usage_stats() -> Result<UsageStats, String> {
 pub fn get_analytics_data() -> Result<AnalyticsData, String> {
     let analytics = AnalyticsData::load();
     Ok(analytics)
+}
+
+#[tauri::command]
+pub fn get_transcription_history(limit: Option<usize>) -> Result<Vec<RecordingSession>, String> {
+    use crate::modules::storage::history::TranscriptionHistory;
+    
+    let history = TranscriptionHistory::load();
+    let entries = history.get_recent_entries(limit.unwrap_or(100));
+    
+    // Convert to RecordingSession format
+    let sessions: Vec<RecordingSession> = entries.iter().map(|entry| {
+        RecordingSession {
+            id: entry.id.clone(),
+            timestamp: entry.timestamp,
+            duration_ms: entry.duration_ms,
+            audio_length_ms: entry.duration_ms, // Use duration as audio length for now
+            transcription_length: entry.character_count,
+            transcribed_text: entry.transcribed_text.clone(),
+            processing_time_ms: entry.processing_time_ms,
+            success: entry.success,
+            error_message: None, // Add error message field to TranscriptionEntry if needed
+        }
+    }).collect();
+    
+    Ok(sessions)
+}
+
+#[tauri::command]
+pub fn delete_transcription_entry(entry_id: String) -> Result<bool, String> {
+    use crate::modules::storage::history::TranscriptionHistory;
+    
+    let mut history = TranscriptionHistory::load();
+    let deleted = history.delete_entry(&entry_id);
+    
+    if deleted {
+        // Also update usage stats
+        let stats = UsageStats::load();
+        // Note: This is a simplified approach. In a real implementation,
+        // you'd want to recalculate stats properly
+        if let Err(e) = stats.save() {
+            error!("Failed to update usage stats after deletion: {}", e);
+        }
+    }
+    
+    Ok(deleted)
 }
 
 #[tauri::command]
@@ -710,27 +673,6 @@ pub fn record_transcription_session(
     analytics.update_with_recording(audio_length_ms, transcription_length);
 
     Ok(())
-}
-
-#[tauri::command]
-pub fn get_formatted_usage_stats() -> Result<serde_json::Value, String> {
-    let stats = UsageStats::load();
-    
-    let formatted_stats = serde_json::json!({
-        "total_recordings": stats.total_recordings,
-        "total_duration_ms": stats.total_duration_ms,
-        "total_duration_formatted": stats.get_total_duration_formatted(),
-        "average_duration_ms": stats.get_average_duration(),
-        "average_processing_time_ms": stats.get_average_processing_time(),
-        "success_rate": stats.get_success_rate(),
-        "successful_recordings": stats.successful_recordings,
-        "failed_recordings": stats.failed_recordings,
-        "total_characters_transcribed": stats.total_characters_transcribed,
-        "first_use": stats.first_use,
-        "last_use": stats.last_use,
-    });
-    
-    Ok(formatted_stats)
 }
 
 #[tauri::command]
@@ -817,8 +759,6 @@ pub fn read_version_file() -> Result<String, String> {
     Ok("1.0.3".to_string())
 }
 
-
-
 #[tauri::command]
 pub fn test_text_injection(test_text: String) -> Result<String, String> {
     use crate::modules::core::text_injection::inject_text;
@@ -859,8 +799,6 @@ pub fn test_simple_text_injection() -> Result<String, String> {
         }
     }
 }
-
-
 
 #[derive(serde::Serialize)]
 pub struct UpdateCheckResult {
@@ -1042,3 +980,4 @@ pub fn restart_app() -> Result<(), String> {
 pub fn close_app() -> Result<(), String> {
     std::process::exit(0);
 }
+

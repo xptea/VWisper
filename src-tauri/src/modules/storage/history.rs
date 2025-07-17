@@ -26,7 +26,7 @@ impl Default for TranscriptionHistory {
     fn default() -> Self {
         Self {
             entries: Vec::new(),
-            max_entries: 1000, // Keep last 1000 transcriptions
+            max_entries: 1000,
         }
     }
 }
@@ -52,7 +52,6 @@ impl TranscriptionHistory {
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let history_path = Self::get_history_path()?;
         
-        // Ensure parent directory exists
         if let Some(parent) = history_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -73,32 +72,15 @@ impl TranscriptionHistory {
     pub fn add_entry(&mut self, entry: TranscriptionEntry) {
         self.entries.push(entry);
         
-        // Keep only the most recent entries
         if self.entries.len() > self.max_entries {
             self.entries.drain(0..self.entries.len() - self.max_entries);
         }
         
-        // Sort by timestamp (newest first)
         self.entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
     }
 
     pub fn get_recent_entries(&self, limit: usize) -> Vec<&TranscriptionEntry> {
         self.entries.iter().take(limit).collect()
-    }
-
-    pub fn get_entries_by_date_range(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Vec<&TranscriptionEntry> {
-        self.entries
-            .iter()
-            .filter(|entry| entry.timestamp >= start && entry.timestamp <= end)
-            .collect()
-    }
-
-    pub fn search_entries(&self, query: &str) -> Vec<&TranscriptionEntry> {
-        let query_lower = query.to_lowercase();
-        self.entries
-            .iter()
-            .filter(|entry| entry.transcribed_text.to_lowercase().contains(&query_lower))
-            .collect()
     }
 
     pub fn delete_entry(&mut self, id: &str) -> bool {
@@ -109,58 +91,14 @@ impl TranscriptionHistory {
             false
         }
     }
-
-    pub fn clear_all(&mut self) {
-        self.entries.clear();
-    }
-
-    pub fn get_total_entries(&self) -> usize {
-        self.entries.len()
-    }
-
-    pub fn get_success_rate(&self) -> f64 {
-        if self.entries.is_empty() {
-            return 0.0;
-        }
-        
-        let successful = self.entries.iter().filter(|entry| entry.success).count();
-        (successful as f64) / (self.entries.len() as f64) * 100.0
-    }
-
-    pub fn get_average_processing_time(&self) -> u64 {
-        if self.entries.is_empty() {
-            return 0;
-        }
-        
-        let total_time: u64 = self.entries.iter().map(|entry| entry.processing_time_ms).sum();
-        total_time / self.entries.len() as u64
-    }
-
-    pub fn get_total_characters(&self) -> usize {
-        self.entries.iter().map(|entry| entry.character_count).sum()
-    }
-
-    pub fn get_total_words(&self) -> usize {
-        self.entries.iter().map(|entry| entry.word_count).sum()
-    }
 }
 
-// Helper function to estimate word count from character count
 pub fn estimate_word_count(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
     
-    // Split by whitespace and count non-empty words
     text.split_whitespace().count()
 }
 
-// Helper function to generate a unique ID for transcription entries
-pub fn generate_entry_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    format!("txn_{}", timestamp)
-}
+
