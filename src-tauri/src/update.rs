@@ -21,7 +21,83 @@ pub struct UpdateResult {
 }
 
 pub fn get_current_version() -> Result<String, String> {
-    Ok("1.0.2".to_string())
+    Ok("1.0.4".to_string())
+}
+
+fn get_platform_download_url(version: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        format!(
+            "https://github.com/xptea/VWisper/releases/download/{}/vwisper_{}_x64-setup.exe",
+            version, version
+        )
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        format!(
+            "https://github.com/xptea/VWisper/releases/download/{}/vwisper_{}_x64.dmg",
+            version, version
+        )
+    }
+    
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        format!(
+            "https://github.com/xptea/VWisper/releases/download/{}/vwisper_{}_x64-setup.exe",
+            version, version
+        )
+    }
+}
+
+fn get_installer_filename() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "vwisper_update_installer.exe"
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        "vwisper_update_installer.dmg"
+    }
+    
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        "vwisper_update_installer.exe"
+    }
+}
+
+fn install_update(installer_path: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let _result = Command::new(installer_path)
+            .spawn()
+            .map_err(|e| format!("Failed to start installer: {}", e))?;
+        
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        Ok(())
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        let _result = Command::new("open")
+            .arg(installer_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open DMG file: {}", e))?;
+        
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        Ok(())
+    }
+    
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let _result = Command::new(installer_path)
+            .spawn()
+            .map_err(|e| format!("Failed to start installer: {}", e))?;
+        
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        Ok(())
+    }
 }
 
 pub fn check_for_updates() -> Result<UpdateInfo, String> {
@@ -58,10 +134,7 @@ pub fn check_for_updates() -> Result<UpdateInfo, String> {
     
     let has_update = compare_versions(&current_version, &latest_version) < 0;
     let download_url = if has_update {
-        Some(format!(
-            "https://github.com/xptea/VWisper/releases/download/{}/vwisper_{}_x64-setup.exe",
-            latest_version, latest_version
-        ))
+        Some(get_platform_download_url(&latest_version))
     } else {
         None
     };
@@ -87,7 +160,8 @@ pub fn download_and_install_update(download_url: String) -> Result<UpdateResult,
     }
     
     let temp_dir = env::temp_dir();
-    let installer_path = temp_dir.join("vwisper_update_installer.exe");
+    let installer_filename = get_installer_filename();
+    let installer_path = temp_dir.join(installer_filename);
     
     let mut file = fs::File::create(&installer_path)
         .map_err(|e| format!("Failed to create installer file: {}", e))?;
@@ -103,11 +177,7 @@ pub fn download_and_install_update(download_url: String) -> Result<UpdateResult,
     
     let installer_path_str = installer_path.to_string_lossy().to_string();
     
-    let _result = Command::new(&installer_path_str)
-        .spawn()
-        .map_err(|e| format!("Failed to start installer: {}", e))?;
-    
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    install_update(&installer_path_str)?;
     
     Ok(UpdateResult {
         success: true,
