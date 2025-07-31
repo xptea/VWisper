@@ -4,5 +4,8 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>VWisper requires microphone access to record your voice for transcription.</string>
+
+  <key>LSUIElement</key>
+  <true/>
 </dict>
-</plist> 
+</plist>

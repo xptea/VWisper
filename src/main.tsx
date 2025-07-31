@@ -1,41 +1,41 @@
-import React, { StrictMode, useState, useEffect } from "react";
+import React from "react";
 import ReactDOM from "react-dom/client";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider } from "./lib/theme-provider";
+import AudioPill from "./app/audio-pill/page";
+import DashboardLayout from "./app/dashboard/layout";
+import DashboardPage from "./app/dashboard/page";
+import SettingsPage from "./app/settings/page";
+import { UpdateChecker } from "./components/UpdateChecker";
+import { Toaster } from "./components/ui/sonner";
 
-import App from "./App";
-import Dashboard from "./components/Dashboard";
+function App() {
+  return (
+    <ThemeProvider defaultTheme="system" storageKey="vwisper-ui-theme">
+      <UpdateChecker />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<AudioPill />} />
+          <Route path="/dashboard" element={
+            <DashboardLayout>
+              <DashboardPage />
+            </DashboardLayout>
+          } />
+          <Route path="/settings" element={
+            <DashboardLayout>
+              <SettingsPage />
+            </DashboardLayout>
+          } />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </BrowserRouter>
+      <Toaster />
+    </ThemeProvider>
+  );
+}
 
-// Main App Router Component
-const AppRouter: React.FC = () => {
-  const [currentWindow, setCurrentWindow] = useState<string>("");
-
-  // Initialize window detection
-  useEffect(() => {
-    const initWindow = async () => {
-      const window = getCurrentWindow();
-      const label = window.label;
-      console.log("Current window label:", label);
-      setCurrentWindow(label);
-    };
-    initWindow();
-  }, []);
-
-  // Route to appropriate component based on window label
-  if (currentWindow === "dashboard") {
-    console.log("Rendering dashboard component");
-  return <Dashboard />;
-  } else if (currentWindow === "wave-window" || currentWindow === "main") {
-    console.log("Rendering wave window component");
-    return <App />;
-  }
-  
-  console.log("No matching window found, currentWindow:", currentWindow);
-  return null;
-};
-
-// Initialize the app
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <StrictMode>
-    <AppRouter />
-  </StrictMode>,
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
 );

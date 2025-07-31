@@ -1,27 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from '@tailwindcss/vite'
+import path from "path"
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
-
-  resolve: {
-    alias: {
-      "@": "/src",
-    },
-  },
-
-  build: {
-    rollupOptions: {
-      input: {
-        main: "index.html",
-        "wave-window": "src/wave-window.html",
-        dashboard: "src/dashboard.html"
-      }
-    }
-  },
+  plugins: [react(), tailwindcss()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
@@ -42,6 +28,18 @@ export default defineConfig(async () => ({
     watch: {
       // 3. tell vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
+    },
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+      },
+    },
+  },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
     },
   },
 }));

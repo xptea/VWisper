@@ -1,51 +1,24 @@
-# -------------------------------
-# General
-# -------------------------------
-.DS_Store
-Thumbs.db
+# Logs
+logs
 *.log
-*.swp
-*.swo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Environment files
-.env
-.env.*
+node_modules
+dist
+dist-ssr
+*.local
 
-# Editor directories
-.idea/
-.vscode/
-
-# -------------------------------
-# Node / Bun
-# -------------------------------
-node_modules/
-# Bun stores installs in its cache directory, ignore it
-.bun-*/
-.cache/
-
-# Build output (Vite, React, etc.)
-dist/
-.vite/
-
-# -------------------------------
-# Rust / Cargo (Tauri backend)
-# -------------------------------
-# Top-level cargo artifacts
-/target/
-# Nested target dir inside src-tauri (older Tauri versions)
-/src-tauri/target/
-
-# Tauri generated artifacts
-/**/*.app/
-/**/*.dmg
-/**/*.msi
-/**/*.deb
-/**/*.rpm
-/**/*.snap
-/**/*.AppImage
-
-# -------------------------------
-# Miscellaneous
-# -------------------------------
-*.bak
-*.tmp 
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

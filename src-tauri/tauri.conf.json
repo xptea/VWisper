@@ -1,31 +1,44 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "vwisper",
-  "version": "0.1.0",
-  "identifier": "com.vwisper.desktop",
+  "version": "1.0.2",
+  "identifier": "com.vwisper.application",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
-    "app": {
+  "app": {
     "macOSPrivateApi": true,
+
     "windows": [
+      {
+        "title": "vwisper",
+        "width": 200,
+        "height": 80,
+        "visible": false,
+        "center": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
+      },
       {
         "label": "dashboard",
         "title": "VWisper Dashboard",
-        "width": 1235,
-        "height": 1140,
+        "width": 1200,
+        "height": 800,
+        "visible": false,
+        "center": true,
         "decorations": true,
         "transparent": false,
+        "shadow": true,
         "alwaysOnTop": false,
         "skipTaskbar": false,
         "resizable": true,
-        "visible": false,
-        "center": true,
-        "url": "src/dashboard.html",
-        "shadow": true
+        "url": "dashboard.html"
       }
     ],
     "security": {
@@ -41,9 +54,6 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "macOS": {
-      "entitlements": "./Entitlements.plist"
-    }
+    ]
   }
 }
