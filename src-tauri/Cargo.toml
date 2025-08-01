@@ -29,7 +29,6 @@ windows = { version = "0.56", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_Foundation"
 ] }
-device_query = "1.1"
 tauri = { version = "2", features = [ "macos-private-api", "tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
@@ -54,4 +53,3 @@ core-graphics = { version = "0.23", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-graphics = "0.23"
-

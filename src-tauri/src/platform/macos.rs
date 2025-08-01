@@ -1,6 +1,6 @@
 use std::thread;
 use std::time::{Duration, Instant};
-use device_query::{DeviceState, Keycode, DeviceQuery};
+use rdev::{listen, Event, EventType, Key};
 use tauri::{AppHandle, Emitter, Manager};
 use crate::audio;
 use crate::handle_stop_recording_workflow;
@@ -8,20 +8,32 @@ use crate::handle_stop_recording_workflow;
 #[cfg(target_os = "macos")]
 use core_graphics::window::{CGWindowListCopyWindowInfo, kCGWindowListOptionOnScreenOnly, kCGNullWindowID};
 
+static mut FN_PRESSED: bool = false;
+
 pub fn start_global_key_monitor(app_handle: AppHandle) {
     thread::spawn(move || {
-        let device_state = DeviceState::new();
-        let mut last_control_state = false;
+        let mut last_fn_state = false;
         let mut last_action_time = Instant::now();
         let active_window_info: Option<String> = None;
         let mut hold_start_time: Option<Instant> = None;
         
-        loop {
-            let keys = device_state.get_keys();
-            let control_pressed = keys.contains(&Keycode::LControl) || keys.contains(&Keycode::RControl);
+        // Listen for key events
+        if let Err(error) = listen(move |event: Event| {
+            // Check if FN key state changed
+            if let EventType::KeyPress(Key::Function) = event.event_type {
+                unsafe {
+                    FN_PRESSED = true;
+                }
+            } else if let EventType::KeyRelease(Key::Function) = event.event_type {
+                unsafe {
+                    FN_PRESSED = false;
+                }
+            }
+            
+            let fn_pressed = unsafe { FN_PRESSED };
             let now = Instant::now();
             
-            if control_pressed && !last_control_state && now.duration_since(last_action_time) > Duration::from_millis(25) {
+            if fn_pressed && !last_fn_state && now.duration_since(last_action_time) > Duration::from_millis(25) {
                 last_action_time = now;
                 hold_start_time = Some(now); // Record when the key press started
                 
@@ -45,7 +57,7 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
                 let _ = audio::start_recording();
             }
             
-            if !control_pressed && last_control_state && now.duration_since(last_action_time) > Duration::from_millis(25) {
+            if !fn_pressed && last_fn_state && now.duration_since(last_action_time) > Duration::from_millis(25) {
                 last_action_time = now;
                 let _ = app_handle.emit_to("main", "pill-state", "loading");
                 let _ = app_handle.emit_to("main", "stop-recording", "");
@@ -91,8 +103,9 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
                     let _ = app_handle.emit_to("main", "hold-time", hold_time);
                 }
             }
-            last_control_state = control_pressed;
-            thread::sleep(Duration::from_millis(15));
+            last_fn_state = fn_pressed;
+        }) {
+            eprintln!("Error listening for global key events: {:?}", error);
         }
     });
 }

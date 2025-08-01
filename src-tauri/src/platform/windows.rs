@@ -1,6 +1,6 @@
 use std::thread;
 use std::time::{Duration, Instant};
-use device_query::{DeviceState, Keycode, DeviceQuery};
+use rdev::{listen, Event, EventType, Key};
 use tauri::{AppHandle, Emitter, Manager};
 use crate::audio;
 use crate::handle_stop_recording_workflow;
@@ -10,17 +10,30 @@ use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SetForeground
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HWND;
 
+static mut CONTROL_PRESSED: bool = false;
+static mut LAST_ACTION_TIME: std::time::Instant = std::time::Instant::now();
+
 pub fn start_global_key_monitor(app_handle: AppHandle) {
     thread::spawn(move || {
-        let device_state = DeviceState::new();
         let mut last_control_state = false;
         let mut last_action_time = Instant::now();
         let mut active_window_handle: Option<HWND> = None;
         let mut hold_start_time: Option<Instant> = None;
         
-        loop {
-            let keys = device_state.get_keys();
-            let control_pressed = keys.contains(&Keycode::RControl);
+        // Listen for key events
+        if let Err(error) = listen(move |event: Event| {
+            // Check if Control key state changed
+            if let EventType::KeyPress(Key::ControlLeft) | EventType::KeyPress(Key::ControlRight) = event.event_type {
+                unsafe {
+                    CONTROL_PRESSED = true;
+                }
+            } else if let EventType::KeyRelease(Key::ControlLeft) | EventType::KeyRelease(Key::ControlRight) = event.event_type {
+                unsafe {
+                    CONTROL_PRESSED = false;
+                }
+            }
+            
+            let control_pressed = unsafe { CONTROL_PRESSED };
             let now = Instant::now();
             
             if control_pressed && !last_control_state && now.duration_since(last_action_time) > Duration::from_millis(25) {
@@ -83,7 +96,8 @@ pub fn start_global_key_monitor(app_handle: AppHandle) {
                 }
             }
             last_control_state = control_pressed;
-            thread::sleep(Duration::from_millis(15));
+        }) {
+            eprintln!("Error listening for global key events: {:?}", error);
         }
     });
 }
